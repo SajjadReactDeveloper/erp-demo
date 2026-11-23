@@ -134,9 +134,12 @@ export function registerAuth(app: FastifyInstance) {
     if (!stableId) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
     if (ms && (claims.xms_edov === false || (claims.idp && claims.idp !== claims.iss))) throw new HttpError(403, 'bad_identity', 'Guest or unverified accounts cannot sign in');
     const subject = `${req.params.provider}:${ms ? tenant : 'google'}:${stableId}`;
+    const tokenEmail = String(claims?.email ?? (ms ? claims?.preferred_username : '') ?? '').toLowerCase();
     let u = await prisma.user.findFirst({ where: { ssoSubject: subject, kind: 'staff', isActive: true } });
-    if (!u && claims?.email) {
-      const cand = await prisma.user.findFirst({ where: { email: String(claims.email).toLowerCase(), kind: 'staff', isActive: true } });
+    // A linked account must still carry the same email as the provider's token: if an admin changed the ERP email (reassigned address, leaver), the old identity stops working until re-linked.
+    if (u && u.email.toLowerCase() !== tokenEmail) throw new HttpError(403, 'identity_mismatch', 'This sign-in no longer matches the account email. Ask an administrator.');
+    if (!u && tokenEmail) {
+      const cand = await prisma.user.findFirst({ where: { email: tokenEmail, kind: 'staff', isActive: true } });
       if (cand && !cand.ssoSubject) {
         u = await prisma.user.update({ where: { id: cand.id }, data: { ssoSubject: subject } });
         await audit(prisma, { companyId: cand.companyId, userId: cand.id, ip: req.ip }, 'User', cand.id, 'login', undefined, { sso: req.params.provider, linked: true });
