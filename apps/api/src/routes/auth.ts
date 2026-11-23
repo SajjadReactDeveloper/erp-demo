@@ -122,7 +122,12 @@ export function registerAuth(app: FastifyInstance) {
     const cfg: any = await (await fetch(`${p.issuer}/.well-known/openid-configuration`)).json();
     const tok: any = await (await fetch(cfg.token_endpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: process.env[`OIDC_${p.env}_CLIENT_ID`]!, client_secret: process.env[`OIDC_${p.env}_CLIENT_SECRET`] ?? '', redirect_uri: `${process.env.WEB_ORIGIN}/auth/sso/${req.params.provider}` }) })).json();
     const claims: any = jwt.decode(tok.id_token); // received straight from the provider token endpoint over TLS (code flow); claims are still validated below
-    if (!claims || claims.aud !== process.env[`OIDC_${p.env}_CLIENT_ID`] || !String(claims.iss ?? '').startsWith(req.params.provider === 'google' ? 'https://accounts.google.com' : 'https://login.microsoftonline.com/') || (req.params.provider === 'microsoft' && process.env.OIDC_MICROSOFT_TENANT && claims.tid !== process.env.OIDC_MICROSOFT_TENANT) || (req.params.provider === 'google' && claims.email_verified !== true)) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
+    // Fail closed: Microsoft sign-in is only allowed for one configured tenant, with the exact issuer for that tenant.
+    const ms = req.params.provider === 'microsoft'; const tenant = process.env.OIDC_MICROSOFT_TENANT;
+    if (ms && !tenant) throw new HttpError(501, 'sso_not_configured', 'Microsoft SSO needs OIDC_MICROSOFT_TENANT to be set');
+    const issuerOk = ms ? claims?.tid === tenant && claims?.iss === `https://login.microsoftonline.com/${tenant}/v2.0` : ['https://accounts.google.com', 'accounts.google.com'].includes(String(claims?.iss ?? ''));
+    const notExpired = typeof claims?.exp === 'number' && claims.exp * 1000 > Date.now();
+    if (!claims || claims.aud !== process.env[`OIDC_${p.env}_CLIENT_ID`] || !issuerOk || !notExpired || (!ms && claims.email_verified !== true)) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
     const u = claims?.email ? await prisma.user.findFirst({ where: { email: String(claims.email).toLowerCase(), kind: 'staff', isActive: true } }) : null;
     if (!u) throw new HttpError(403, 'no_account', 'No ERP account is linked to this identity. Ask an administrator.');
     if (u.mfaEnabled) return { mfaRequired: true, mfaToken: signToken(u, '5m', 'mfa') };

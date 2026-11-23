@@ -10,15 +10,43 @@ import { postJournal } from '../services/posting';
 import { sendMessage } from '../adapters';
 import { createCreditNote, issueInvoice, recalcInvoice } from './finance';
 
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
-const privateIp = (ip: string) => /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|::1$|fc|fd|fe80)/i.test(ip);
-async function assertPublicHttps(raw: string) {
-  const bad = (m: string) => Object.assign(new Error(m), { code: 'BLOCKED_URL' });
-  let u: URL; try { u = new URL(raw); } catch { throw bad('Feed URL is not valid'); }
-  if (u.protocol !== 'https:') throw bad('Feed URL must use https');
-  const addrs = isIP(u.hostname) ? [{ address: u.hostname }] : await lookup(u.hostname, { all: true }).catch(() => { throw bad('Feed host could not be resolved'); });
-  if (addrs.some((a) => privateIp(a.address))) throw bad('Feed URL must point to a public host');
+import dns from 'node:dns';
+import https from 'node:https';
+import { BlockList, isIP } from 'node:net';
+// Every non-public range: loopback, private, link-local, CGNAT, documentation, multicast, reserved, 6to4/Teredo, ULA.
+const blocked = new BlockList();
+for (const [a, p] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]] as [string, number][]) blocked.addSubnet(a, p, 'ipv4');
+for (const [a, p] of [['::', 128], ['::1', 128], ['64:ff9b::', 96], ['100::', 64], ['2001::', 32], ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]] as [string, number][]) blocked.addSubnet(a, p, 'ipv6');
+/** IPv4-mapped IPv6 (::ffff:a.b.c.d or ::ffff:7f00:1) is checked as the IPv4 address it really is. */
+function unmap(ip: string) {
+  const m = ip.toLowerCase().match(/^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/); if (!m) return ip; if (m[1]) return m[1];
+  const hi = parseInt(m[2], 16), lo = parseInt(m[3], 16); return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+}
+const privateIp = (ip: string) => { const a = unmap(ip); const f = isIP(a); return !f || blocked.check(a, f === 4 ? 'ipv4' : 'ipv6'); };
+const blockedErr = (m: string) => Object.assign(new Error(m), { code: 'BLOCKED_URL' });
+/** DNS lookup used by the socket itself, so the address that is checked is the address that is connected to (no rebinding gap). */
+const safeLookup = ((host: string, opts: any, cb: any) => dns.lookup(host, opts, (err, address: any, family) => {
+  if (err) return cb(err, address, family);
+  const list: string[] = Array.isArray(address) ? address.map((x: any) => x.address) : [address];
+  if (list.some(privateIp)) return cb(blockedErr('Feed URL must point to a public host'), address, family);
+  cb(null, address, family);
+})) as any;
+/** GET a public https JSON document: no redirects, 8s timeout, 5 MB cap, connection pinned to a validated public address. */
+function fetchPublicJson(raw: string): Promise<any> {
+  let u: URL; try { u = new URL(raw); } catch { throw blockedErr('Feed URL is not valid'); }
+  if (u.protocol !== 'https:') throw blockedErr('Feed URL must use https');
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host) && privateIp(host)) throw blockedErr('Feed URL must point to a public host');
+  return new Promise((resolve, reject) => {
+    const req = https.request(u, { method: 'GET', lookup: safeLookup, headers: { accept: 'application/json' }, timeout: 8000 }, (res) => {
+      if ((res.statusCode ?? 0) < 200 || (res.statusCode ?? 0) >= 300) { res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
+      const chunks: Buffer[] = []; let size = 0;
+      res.on('data', (c: Buffer) => { size += c.length; if (size > 5 * 1024 * 1024) { req.destroy(new Error('Feed is too large')); } else chunks.push(c); });
+      res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch { reject(new Error('Feed must be JSON')); } });
+      res.on('error', reject);
+    });
+    req.on('timeout', () => req.destroy(new Error('Feed timed out'))); req.on('error', reject); req.end();
+  });
 }
 // ================= MARKETPLACE (SUP-04..08) =================
 A('VendorApplication.approve', async ({ ctx, tx, row }) => {
@@ -53,7 +81,7 @@ A('CatalogueMatch.reject', async ({ tx, row }) => { if (!(await tx.catalogueMatc
 A('AvailabilityFeed.run', async ({ ctx, tx, row }) => {
   if (!row.url) throw bad('Add the feed URL first. File feeds are uploaded from the catalogue screen.');
   let items: any[] = [];
-  try { await assertPublicHttps(row.url); const r = await fetch(row.url, { signal: AbortSignal.timeout(8000), redirect: 'error' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); items = (await r.json()) as any[]; if (!Array.isArray(items)) throw new Error('Feed must be a JSON array'); }
+  try { items = await fetchPublicJson(row.url); if (!Array.isArray(items)) throw new Error('Feed must be a JSON array'); }
   catch (e: any) { const m = e?.code === 'BLOCKED_URL' ? e.message : 'The feed could not be fetched'; return { status: 'error', set: { lastError: m, lastRunAt: new Date() }, message: `Feed failed: ${m}` }; }
   let n = 0;
   for (const it of items.slice(0, 5000)) {

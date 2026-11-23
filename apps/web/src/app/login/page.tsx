@@ -35,7 +35,7 @@ function LoginForm() {
   const home = (kind: string) => (kind === 'customer' ? '/portal' : kind === 'supplier' ? '/supplier' : '/app');
 
   useEffect(() => {
-    if (ready && me) router.replace(sp.get('next') && sp.get('next')!.startsWith('/') ? sp.get('next')! : home(me.kind));
+    if (ready && me) { const nx = sp.get('next'); /* same-origin paths only: reject '//host' and '/\host' */ router.replace(nx && nx.startsWith('/') && !nx.startsWith('//') && !nx.startsWith('/\\') ? nx : home(me.kind)); }
     // eslint-disable-next-line
   }, [ready, me]);
 

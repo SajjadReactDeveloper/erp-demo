@@ -19,7 +19,9 @@ const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? 'info', redact: ['req.headers.authorization'] },
   bodyLimit: 2 * 1024 * 1024,
   genReqId: () => crypto.randomUUID(),
-  trustProxy: true,
+  // Only honour X-Forwarded-For from known proxies: TRUST_PROXY=<hops> or a comma-separated list of proxy IPs/CIDRs.
+  // Unset = direct connections, so a client can never spoof its address (rate limits key on req.ip).
+  trustProxy: (process.env.TRUST_PROXY ? (/^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY.split(',').map((x) => x.trim())) : false) as any,
 });
 
 await app.register(helmet, { contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } });
