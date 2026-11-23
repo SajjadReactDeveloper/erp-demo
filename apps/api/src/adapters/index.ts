@@ -145,7 +145,8 @@ export const llm = {
   },
   async json(system: string, user: string, images?: { mime: string; b64: string }[], err?: { status?: number }): Promise<any | null> {
     const content: any = images?.length ? [{ type: 'text', text: user }, ...images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.b64}` } }))] : user;
-    const r = await llm.chat([{ role: 'system', content: system }, { role: 'user', content }], { json: true, vision: !!images?.length, err });
+    const r = await llm.chat([{ role: 'system', content: system + '
+Respond with a single JSON object only.' }, { role: 'user', content }], { json: true, vision: !!images?.length, err });
     if (!r) return null; try { return { data: JSON.parse(r.text.replace(/^```(?:json)?|```$/g, '').trim()), ms: r.ms }; } catch { return null; }
   },
 };
