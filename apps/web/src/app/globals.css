@@ -10,7 +10,7 @@
   --text: 221 38% 14%; --text-secondary: 215 16% 47%; --text-strong: 215 19% 35%;
   --success: 142 72% 29%; --success-bg: 141 84% 93%; --warning: 21 90% 40%; --warning-bg: 34 100% 92%; --error: 0 74% 42%; --error-bg: 0 93% 94%; --info: 224 76% 48%; --info-bg: 223 100% 94%;
 }
-html { color-scheme: light; }
+html { color-scheme: light; scroll-behavior: smooth; }
 body { @apply bg-bg text-fg text-body antialiased; font-feature-settings: 'tnum', 'cv11'; text-rendering: optimizeLegibility; }
 [dir='rtl'] body { font-family: var(--font-arabic), var(--font-jakarta), system-ui, sans-serif; line-height: 1.7; }
 * { @apply border-line; }
