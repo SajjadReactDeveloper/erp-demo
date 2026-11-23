@@ -178,7 +178,12 @@ export async function createRow(tx: Tx, ctx: Ctx, res: ResourceDef, input: any, 
   data.createdById = ctx.userId;
   const lockStatus = res.actions.length > 0 && res.statusField;
   if (!opts.trusted && lockStatus && !data[lockStatus]) data[lockStatus] = res.fields.find((f) => f.name === lockStatus)!.values![0];
-  if (res.num && res.numField && !data[res.numField] && !hooks[res.key]?.deferNumber) data[res.numField] = await nextNumber(tx, ctx.companyId, res.num, data.branchId ?? ctx.branchId);
+  if (res.num && res.numField && !data[res.numField] && !hooks[res.key]?.deferNumber) {
+    // skip numbers already used (e.g. records imported/seeded with explicit codes before the counter existed)
+    let num = await nextNumber(tx, ctx.companyId, res.num, data.branchId ?? ctx.branchId);
+    for (let i = 0; i < 5000 && (await delegateOf(tx, res.key).findFirst({ where: { companyId: ctx.companyId, [res.numField]: num }, select: { id: true } })); i++) num = await nextNumber(tx, ctx.companyId, res.num, data.branchId ?? ctx.branchId);
+    data[res.numField] = num;
+  }
   await inheritRequestId(tx, res, data);
   await hooks[res.key]?.beforeCreate?.({ ctx, tx, data, children });
   const row = await delegateOf(tx, res.key).create({ data });
