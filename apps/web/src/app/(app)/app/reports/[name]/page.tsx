@@ -1,11 +1,13 @@
 'use client';
 import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api, download, openDoc } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { fmtNum, toInputDate } from '@/lib/format';
-import { Button, Card, EmptyState, ErrorState, Input, Select, SkeletonRows, cn, toast } from '@/components/ui';
+import { Button, Card, EmptyState, ErrorState, Input, Select, SkeletonRows, Tabs, cn, toast } from '@/components/ui';
 import { DashHeader, TD, TH } from '@/components/erp/dash';
+import { REPORTS } from '@/components/erp/shell';
 import { RefPicker } from '@/components/erp/fields';
 
 const NAMES: Record<string, [string, string, string[]]> = {
@@ -14,7 +16,7 @@ const NAMES: Record<string, [string, string, string[]]> = {
 };
 
 export default function ReportPage({ params }: { params: Promise<{ name: string }> }) {
-  const { name } = use(params); const { t, lang } = useT(); const def = NAMES[name];
+  const { name } = use(params); const { t, lang } = useT(); const router = useRouter(); const def = NAMES[name];
   const today = new Date(); const ys = new Date(today.getFullYear(), 0, 1);
   const [f, setF] = useState<Record<string, string>>({ asOf: toInputDate(today), from: toInputDate(name === 'statement' ? new Date(today.getTime() - 90 * 864e5) : ys), to: toInputDate(today), groupBy: 'customer', customerId: '' });
   const ready = !!def && (name !== 'statement' || !!f.customerId);
@@ -25,6 +27,7 @@ export default function ReportPage({ params }: { params: Promise<{ name: string 
   return (
     <div className="space-y-5">
       <DashHeader title={def[lang === 'ar' ? 1 : 0]} sub={t('Financial report, generated live from the ledger.')} actions={<>{[['xlsx', 'file-spreadsheet'], ['csv', 'download'], ['pdf', 'printer']].map(([k, i]) => <Button key={k} variant="secondary" size="sm" icon={i} disabled={!ready} onClick={() => exp(k)}>{k.toUpperCase()}</Button>)}</>} />
+      {name !== 'statement' && <Card className="overflow-hidden px-3"><Tabs tabs={REPORTS.map(([k, en, ar]) => ({ key: k, label: lang === 'ar' ? ar : en }))} value={name} onChange={(k) => router.push(`/app/reports/${k}`)} /></Card>}
       {def[2].length > 0 && <Card className="flex flex-wrap items-end gap-4 p-4">
         {def[2].includes('customerId') && <div className="w-64"><span className="mb-1 block text-caption font-semibold text-muted">{t('Customer')}</span><RefPicker resKey="Customer" value={f.customerId} onChange={(v) => setF({ ...f, customerId: v ?? '' })} /></div>}
         {def[2].includes('asOf') && <label className="text-caption font-semibold text-muted">{t('As of')}<Input type="date" value={f.asOf} onChange={(e) => setF({ ...f, asOf: e.target.value })} className="mt-1 h-10 w-44" dir="ltr" /></label>}

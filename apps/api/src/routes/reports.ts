@@ -297,7 +297,7 @@ export function registerReportRoutes(app: FastifyInstance) {
     const ctx: Ctx = req.ctx; const r = TABLES[req.params.name]; if (!r) throw notFound('Report');
     need(ctx, ...r.need);
     const t = await r.run(ctx, req.query); const fmt = String((req.query as any).format ?? 'xlsx');
-    if (fmt === 'pdf' || fmt === 'html') { reply.header('Content-Type', 'text/html; charset=utf-8'); return reply.send(toHtml(t, ((req.query as any).lang as any) === 'en' ? 'en' : ctx.locale)); }
+    if (fmt === 'pdf' || fmt === 'html') { reply.header('Content-Type', 'text/html; charset=utf-8').header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; base-uri 'none'; form-action 'none'"); return reply.send(toHtml(t, ((req.query as any).lang as any) === 'en' ? 'en' : ctx.locale)); }
     const file = await tableToFile(t, fmt);
     reply.header('Content-Type', file.mime).header('Content-Disposition', `attachment; filename="${req.params.name}.${file.ext}"`);
     return reply.send(file.buf);

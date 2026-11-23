@@ -12,6 +12,7 @@ export * from './fields';
 export * from './i18n';
 export { MODULES } from './registry/define';
 export * from './permissions';
+export * from './assistant';
 
 export const RESOURCES: ResourceDef[] = [
   ...platform, ...masterdata, ...crm, ...sales, ...procurement, ...marketplace, ...logistics,

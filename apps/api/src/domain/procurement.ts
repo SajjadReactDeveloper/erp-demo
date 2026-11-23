@@ -8,7 +8,7 @@ import { extractQuote, suggestParts } from '../services/ai';
 import { ensurePart, findPart, recordPrice } from '../services/catalogue';
 import { postJournal } from '../services/posting';
 import { sendMessage } from '../adapters';
-import { readFile } from 'node:fs/promises';
+import { storage } from '../core/storage';
 
 const WEB = process.env.WEB_ORIGIN?.split(',')[0] ?? 'http://localhost:3000';
 
@@ -106,8 +106,8 @@ A('SupplierQuote.reject', async ({ ctx, tx, row }) => { await notifyUsers(tx, ct
 A('SupplierQuote.capture', async ({ ctx, tx, row, body }) => {
   const att = await tx.attachment.findFirst({ where: { id: body?.attachmentId ?? row.attachmentId, companyId: ctx.companyId } });
   if (!att) throw bad('Upload the supplier file first, then run capture');
-  const buffer = await readFile(`uploads/${att.storageKey}`);
-  const ex = await extractQuote({ buffer, filename: att.fileName, mime: att.mimeType ?? '' });
+  const buffer = await storage.get(att.storageKey!);
+  const ex = await extractQuote({ buffer, filename: att.fileName, mime: att.mimeType ?? '' }, ctx.companyId);
   if (!ex.lines.length) return { skip: true, data: ex, message: ex.issues[0] ?? 'No lines could be extracted' };
   const rfqLines = await tx.rfqLine.findMany({ where: { rfqId: row.rfqId }, include: { part: true } });
   await tx.supplierQuoteLine.deleteMany({ where: { supplierQuoteId: row.id } });

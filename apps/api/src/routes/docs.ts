@@ -30,6 +30,8 @@ async function head(companyId: string, title: string, number: string, date: any,
 const linesTable = (t: T, cols: string[], rows: string[][], numCols: number[] = []) => `<table><thead><tr>${cols.map((c, i) => `<th class="${numCols.includes(i) ? 'n' : ''}">${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((x, i) => `<td class="${numCols.includes(i) ? 'n' : ''}">${x}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
 const totals = (t: T, sub: any, vat: any, total: any) => `<table class="tot"><tr><td>${esc(t.subtotal)}</td><td class="n">${money(sub)}</td></tr><tr><td>${esc(t.tax)}</td><td class="n">${money(vat)}</td></tr><tr><td>${esc(t.grand)}</td><td class="n">${money(total)} SAR</td></tr></table>`;
 
+// Printable documents may include admin-edited template HTML: forbid scripts/frames/forms outright.
+const DOC_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; base-uri 'none'; form-action 'none'";
 async function applyTemplate(companyId: string, docType: string, lang: string, html: string) {
   const tpl = await prisma.template.findFirst({ where: { companyId, docType, language: lang, isDefault: true } });
   if (!tpl || tpl.body.trim() === '{{default}}') return html;
@@ -86,10 +88,10 @@ export function registerDocRoutes(app: FastifyInstance) {
       else if (sub === 'delivery_note') { const d = await prisma.deliveryNote.findFirst({ where: { id, companyId: ctx.companyId } }); if (!d) throw notFound('Delivery note'); rows.push({ l1: d.number ?? '', l2: d.routeArea ?? '', code: d.number ?? id }); }
       else throw bad('Unknown label kind');
       const qrs = await Promise.all(rows.map((r) => QRCode.toString(r.code, { type: 'svg', margin: 0, width: 80 })));
-      return reply.header('Content-Type', 'text/html; charset=utf-8').send(`<!doctype html><meta charset="utf-8"><title>Labels</title><style>@page{size:58mm auto;margin:2mm}body{font-family:Arial;margin:0}.l{width:54mm;padding:2mm;page-break-after:always;text-align:center}b{font-size:13px}div{font-size:11px}</style>${rows.map((r, i) => `<div class="l"><b>${esc(r.l1)}</b><div>${esc(r.l2)}</div>${qrs[i]}</div>`).join('')}<script>print()</script>`);
+      return reply.header('Content-Type', 'text/html; charset=utf-8').header('Content-Security-Policy', DOC_CSP).send(`<!doctype html><meta charset="utf-8"><title>Labels</title><style>@page{size:58mm auto;margin:2mm}body{font-family:Arial;margin:0}.l{width:54mm;padding:2mm;page-break-after:always;text-align:center}b{font-size:13px}div{font-size:11px}</style>${rows.map((r, i) => `<div class="l"><b>${esc(r.l1)}</b><div>${esc(r.l2)}</div>${qrs[i]}</div>`).join('')}<script>print()</script>`);
     } else throw notFound('Document type');
     html = await applyTemplate(ctx.companyId, type, lang, html);
-    reply.header('Content-Type', 'text/html; charset=utf-8').header('X-Content-Type-Options', 'nosniff');
+    reply.header('Content-Type', 'text/html; charset=utf-8').header('Content-Security-Policy', DOC_CSP).header('X-Content-Type-Options', 'nosniff');
     return reply.send(page(`${type} ${id.slice(0, 8)}`, html, lang));
   });
 }

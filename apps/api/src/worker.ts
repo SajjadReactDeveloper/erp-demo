@@ -2,12 +2,15 @@
 import { prisma } from '@erp/db';
 import { addDays, notifyRole, num, today, bus, getSetting } from './core/base';
 import { escalateOverdue } from './core/approvals';
+import { loadCtx } from './core/auth-plugin';
+import { can } from '@erp/shared';
 import { creditSweep } from './services/credit';
 import { zatcaRetrySweep } from './services/zatca';
 import { sendMessage } from './adapters';
 import { recomputeSupplierScores } from './domain/procurement';
 import { generateVehicleReminders, runForecast, suggestReorders } from './services/forecast';
 import { TABLES, tableToFile } from './routes/reports';
+import { applyNotificationRules } from './services/notify-rules';
 
 const WEB = process.env.WEB_ORIGIN?.split(',')[0] ?? 'http://localhost:3000';
 const guard = (name: string, fn: () => Promise<any>) => { let busy = false; return async () => { if (busy) return; busy = true; try { await fn(); } catch (e: any) { console.error(`[worker:${name}]`, e.message); } finally { busy = false; } }; };
@@ -16,7 +19,7 @@ const guard = (name: string, fn: () => Promise<any>) => { let busy = false; retu
 async function drainOutbox() {
   const rows = await prisma.outboxEvent.findMany({ where: { status: 'pending', nextRunAt: { lte: new Date() } }, orderBy: { createdAt: 'asc' }, take: 200 });
   for (const e of rows) {
-    try { bus.emit('event', { companyId: e.companyId, type: e.type, payload: e.payload }); await prisma.outboxEvent.update({ where: { id: e.id }, data: { status: 'done', attempts: e.attempts + 1 } }); }
+    try { bus.emit('event', { companyId: e.companyId, type: e.type, payload: e.payload }); await applyNotificationRules(e as any).catch((x) => console.error('[worker:rules]', x.message)); await prisma.outboxEvent.update({ where: { id: e.id }, data: { status: 'done', attempts: e.attempts + 1 } }); }
     catch (err: any) { await prisma.outboxEvent.update({ where: { id: e.id }, data: { attempts: e.attempts + 1, status: e.attempts >= 4 ? 'failed' : 'pending', error: err.message, nextRunAt: new Date(Date.now() + 2 ** e.attempts * 5000) } }); }
   }
   const retry = await prisma.integrationMessage.findMany({ where: { status: 'retry' }, take: 50 });
@@ -83,18 +86,25 @@ export async function runReminders(companyId?: string) {
 // ---- tiny cron matcher (minute hour dom month dow; supports *, numbers, lists, */n) for report schedules ----
 const field = (spec: string, v: number) => spec === '*' || spec.split(',').some((p) => (p.startsWith('*/') ? v % Number(p.slice(2)) === 0 : Number(p) === v));
 export const cronMatch = (cron: string, d: Date) => { const [mi, h, dom, mo, dow] = cron.trim().split(/\s+/); return !!dow && field(mi, d.getMinutes()) && field(h, d.getHours()) && field(dom, d.getDate()) && field(mo, d.getMonth() + 1) && field(dow, d.getDay()); };
+/** Run one schedule now: build the report, mail it to every recipient as an attachment, stamp lastRunAt. */
+export async function runReportSchedule(s: { id: string; companyId: string; report: string; filters: any; format: string; recipients: any; createdById?: string | null }) {
+  const rep = TABLES[s.report]; if (!rep) throw new Error('Unknown report');
+  // Run as the schedule's owner, never with blanket rights. Schedules without an owner fall back to an active administrator.
+  const ownerId = s.createdById ?? (await prisma.user.findFirst({ where: { companyId: s.companyId, kind: 'staff', isActive: true, role: { name: 'admin' } }, select: { id: true } }))?.id;
+  const ctx = ownerId ? await loadCtx(ownerId) : null; if (!ctx || ctx.companyId !== s.companyId) throw new Error('The schedule owner is no longer active');
+  if (!can(ctx.perms, { mod: rep.need[0], slug: rep.need[1] }, 'read')) throw new Error('The schedule owner no longer has access to this report');
+  let recipients: string[] = ((s.recipients as any[]) ?? []).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+  if (!ctx.perms.includes('*')) { const team = new Set((await prisma.user.findMany({ where: { companyId: s.companyId, kind: 'staff', isActive: true }, select: { email: true } })).map((u) => u.email.toLowerCase())); recipients = recipients.filter((r) => team.has(r)); } // only administrators may send to outside addresses
+  const t = await rep.run(ctx, s.filters ?? {}); const file = await tableToFile(t, s.format === 'pdf' ? 'xlsx' : s.format);
+  let sent = 0, failed = ((s.recipients as any[]) ?? []).length - recipients.length;
+  for (const to of recipients) { const r = await sendMessage(prisma, s.companyId, { channel: 'email', to, template: 'report_ready', vars: { title: t.title }, subject: t.title, attachments: [{ filename: `${s.report}.${file.ext}`, content: file.buf }] }); if (r.ok) sent++; else failed++; }
+  await prisma.reportSchedule.update({ where: { id: s.id }, data: { lastRunAt: new Date() } });
+  return { sent, failed, title: t.title };
+}
 async function reportSchedules() {
   const now = new Date();
   const due = (await prisma.reportSchedule.findMany({ where: { isActive: true } })).filter((s) => cronMatch(s.cron, now) && (!s.lastRunAt || now.getTime() - s.lastRunAt.getTime() > 55000));
-  for (const s of due) {
-    const rep = TABLES[s.report]; if (!rep) continue;
-    try {
-      const ctx: any = { companyId: s.companyId, userId: '', role: 'system', perms: ['*'], kind: 'staff', locale: 'ar' };
-      const t = await rep.run(ctx, s.filters ?? {}); const file = await tableToFile(t, s.format === 'pdf' ? 'csv' : s.format);
-      for (const to of ((s.recipients as any[]) ?? [])) await sendMessage(prisma, s.companyId, { channel: 'email', to, template: 'otp', vars: { code: `${t.title} (${file.buf.length} bytes attached as ${s.report}.${file.ext})` }, subject: t.title });
-      await prisma.reportSchedule.update({ where: { id: s.id }, data: { lastRunAt: now } });
-    } catch (e: any) { console.error('[worker:report]', s.name, e.message); }
-  }
+  for (const s of due) { try { await runReportSchedule(s as any); } catch (e: any) { console.error('[worker:report]', s.name, e.message); } }
 }
 
 // ---- daily jobs ----

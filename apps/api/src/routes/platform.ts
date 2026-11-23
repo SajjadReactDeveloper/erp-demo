@@ -9,6 +9,7 @@ import { prisma } from '@erp/db';
 import { BY_KEY, BY_SLUG, RESOURCES, can, PORTAL_WRITE } from '@erp/shared';
 import { Ctx, HttpError, audit, bad, bus, clearSettingCache, conflict, delegateOf, forbidden, nextNumber, notFound, today } from '../core/base';
 import { authenticate, signToken, JWT_SECRET, loadCtx } from '../core/auth-plugin';
+import { storage } from '../core/storage';
 import { authorize, createRow, scopeWhere, zodFor } from '../core/crud';
 import { normPN } from '../services/catalogue';
 import jwt from 'jsonwebtoken';
@@ -120,8 +121,7 @@ export function registerPlatformRoutes(app: FastifyInstance) {
     if (MAGIC[ext] && !MAGIC[ext](file.buf)) throw bad('The file content does not match its extension');
     if (file.buf.includes(Buffer.from('X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR'))) throw bad('The file was rejected by the malware scan');
     const key = `${ctx.companyId}/${randomUUID()}${ext}`;
-    await mkdir(join(UPLOAD_DIR, ctx.companyId), { recursive: true });
-    await writeFile(join(UPLOAD_DIR, key), file.buf);
+    await storage.put(key, file.buf, file.mime);
     const row = await prisma.attachment.create({ data: { companyId: ctx.companyId, refType: fields.refType, refId: fields.refId, fileName: file.name.slice(0, 200), mimeType: file.mime, size: file.buf.length, storageKey: key, kind: (fields.kind as any) ?? 'document', uploadedById: ctx.userId, scanStatus: 'clean' } });
     await audit(prisma, ctx, 'Attachment', row.id, 'create', undefined, { fileName: row.fileName, refType: row.refType });
     reply.code(201);
@@ -136,7 +136,7 @@ export function registerPlatformRoutes(app: FastifyInstance) {
     const a = await prisma.attachment.findFirst({ where: { id: req.params.id, companyId: req.ctx.companyId } });
     if (!a) throw notFound('File');
     await parentFor(req.ctx, a.refType, a.refId);
-    const buf = await readFile(join(UPLOAD_DIR, a.storageKey!)).catch(() => { throw notFound('File'); });
+    const buf = await storage.get(a.storageKey!).catch(() => { throw notFound('File'); });
     const ext = extname(a.fileName).toLowerCase(); const SAFE = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }; const inline = !!SAFE[ext];
     reply.header('Content-Type', SAFE[ext] ?? 'application/octet-stream').header('Content-Security-Policy', "sandbox; default-src 'none'").header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(a.fileName)}`).header('X-Content-Type-Options', 'nosniff');
     return reply.send(buf);
@@ -147,7 +147,7 @@ export function registerPlatformRoutes(app: FastifyInstance) {
     const res = await parentFor(req.ctx, a.refType, a.refId);
     if (req.ctx.kind === 'staff') authorize(req.ctx, res, 'update'); else if (a.uploadedById !== req.ctx.userId) throw forbidden();
     await prisma.attachment.delete({ where: { id: a.id } });
-    await rm(join(UPLOAD_DIR, a.storageKey!), { force: true });
+    await storage.del(a.storageKey!).catch(() => null);
     await audit(prisma, req.ctx, 'Attachment', a.id, 'delete', { fileName: a.fileName });
     return { ok: true };
   });

@@ -1,9 +1,20 @@
 // Raw SQL that Prisma cannot express: immutability, ledger balance, period lock, double-booking exclusion, search extensions.
 import { PrismaClient } from '@prisma/client';
+import { ASSISTANT_KEYS, tableOf } from '@erp/shared';
 
 const prisma = new PrismaClient();
 
+// Read-only role used by the AI assistant for free-form questions: it can only SELECT the analytic tables, never write.
+const assistantRole = [
+  `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'erp_ro') THEN CREATE ROLE erp_ro NOLOGIN; END IF; END $$`,
+  `GRANT erp_ro TO CURRENT_USER`,
+  `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM erp_ro`,
+  `GRANT USAGE ON SCHEMA public TO erp_ro`,
+  ...ASSISTANT_KEYS.map((k) => `GRANT SELECT ON ${tableOf(k)} TO erp_ro`),
+];
+
 const statements: string[] = [
+  ...assistantRole,
   `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
   `CREATE EXTENSION IF NOT EXISTS btree_gist`,
 

@@ -425,6 +425,11 @@ export function Stat({ label, value, sub, icon, loading, tone, chip }: { label: 
   );
 }
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="rounded-xs border border-line bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">{children}</kbd>;
-export const Avatar = ({ name, size = 30, dark }: { name?: string; size?: number; dark?: boolean }) => <span style={{ width: size, height: size }} className={cn('grid shrink-0 place-items-center rounded-full text-caption font-bold', dark ? 'bg-gold-light text-gold-text' : 'bg-soft text-navy')}>{(name ?? '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>;
+function avatarInitials(name?: string) {
+  const clean = (name ?? '').replace(/\s*\([^)]*\)/g, '').trim();
+  const letters = clean.split(/\s+/).map((w) => w.match(/[\p{L}\p{N}]/u)?.[0] ?? '').filter(Boolean);
+  return letters.length ? letters.slice(0, 2).join('').toUpperCase() : '?';
+}
+export const Avatar = ({ name, size = 30, dark }: { name?: string; size?: number; dark?: boolean }) => <span style={{ width: size, height: size }} className={cn('grid shrink-0 select-none place-items-center rounded-full font-bold leading-none', size <= 24 ? 'text-[10px]' : 'text-caption', dark ? 'bg-gold-light text-gold-text' : 'bg-soft text-navy')}>{avatarInitials(name)}</span>;
 /** Progress bar (system §5.8) */
 export const Progress = ({ value, tone = 'gold', className }: { value: number; tone?: 'gold' | 'navy'; className?: string }) => <div role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100} className={cn('h-1.5 overflow-hidden rounded-xs bg-soft', className)}><div className={cn('h-full rounded-xs', tone === 'gold' ? 'bg-gold' : 'bg-navy')} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;

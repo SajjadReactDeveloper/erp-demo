@@ -7,6 +7,7 @@ import Papa from 'papaparse';
 import { Ctx, getSetting, num } from '../core/base';
 import { llm } from '../adapters';
 import { findPart, normPN, searchParts } from './catalogue';
+import { askFreeform } from './assistant-sql';
 
 // ---------------- AI-1: VIN ----------------
 const WMI: Record<string, string> = { JTN: 'Toyota', JT2: 'Toyota', JTD: 'Toyota', JTM: 'Toyota', JTE: 'Toyota', '4T1': 'Toyota', '5TD': 'Toyota', '2T1': 'Toyota', KMH: 'Hyundai', '5NP': 'Hyundai', KNA: 'Kia', KND: 'Kia', '1N4': 'Nissan', JN1: 'Nissan', '3N1': 'Nissan', JN8: 'Nissan', JHM: 'Honda', '1HG': 'Honda', '2HG': 'Honda', '1FA': 'Ford', '1FT': 'Ford', '1FM': 'Ford', '1G1': 'Chevrolet', '1GC': 'Chevrolet', WBA: 'BMW', WDB: 'Mercedes-Benz', WDD: 'Mercedes-Benz', WVW: 'Volkswagen', WAU: 'Audi', JM1: 'Mazda', JS3: 'Suzuki', JMB: 'Mitsubishi', SAL: 'Land Rover', JTH: 'Lexus', JTJ: 'Lexus' };
@@ -60,11 +61,12 @@ export async function suggestParts(tx: Tx, ctx: Ctx, text: string, vehicle?: { m
   }).sort((a, b) => b.confidence - a.confidence);
   if (scored.length > 1 && scored[0].confidence - scored[1].confidence < 0.05) scored[0].confidence = Math.max(0.05, Math.round((scored[0].confidence - 0.15) * 100) / 100);
   let reason = scored[0] ? (scored[0].score >= 0.99 ? 'Exact part-number match' : scored[0].fits ? 'Similar description, fits the vehicle' : 'Similar description / number') : 'No candidate found';
-  if (scored.length > 1 && llm.enabled()) {
+  const useLlm = await llm.active(ctx.companyId);
+  if (scored.length > 1 && useLlm) {
     const r = await llm.json('You re-rank auto-part candidates. Return {"order":[ids...],"reason":"..."} using only the given ids.', JSON.stringify({ request: text, vehicle, candidates: scored.map((s) => ({ id: s.id, partNumber: s.partNumber, name: s.name })) }));
     if (r?.data?.order?.length) { const ord: string[] = r.data.order; scored.sort((a, b) => ord.indexOf(a.id) - ord.indexOf(b.id)); reason = r.data.reason ?? reason; }
   }
-  await tx.aiLog.create({ data: { companyId: ctx.companyId, feature: 'part_match', userId: ctx.userId, input: { text, vehicle } as any, output: { top: scored.slice(0, 3).map((s) => ({ id: s.id, c: s.confidence })) } as any, confidence: scored[0]?.confidence ?? 0, latencyMs: Date.now() - t0, model: llm.enabled() ? 'llm+trgm' : 'trgm', promptVersion: 'v1' } });
+  await tx.aiLog.create({ data: { companyId: ctx.companyId, feature: 'part_match', userId: ctx.userId, input: { text, vehicle } as any, output: { top: scored.slice(0, 3).map((s) => ({ id: s.id, c: s.confidence })) } as any, confidence: scored[0]?.confidence ?? 0, latencyMs: Date.now() - t0, model: useLlm ? 'llm+trgm' : 'trgm', promptVersion: 'v1' } });
   return { candidates: scored, reason };
 }
 
@@ -132,10 +134,11 @@ function parseText(text: string): CapturedLine[] {
   return out;
 }
 
-export async function extractQuote(file: { buffer: Buffer; filename: string; mime: string }): Promise<{ lines: CapturedLine[]; confidence: number; issues: string[]; method: string }> {
+export async function extractQuote(file: { buffer: Buffer; filename: string; mime: string }, companyId?: string): Promise<{ lines: CapturedLine[]; confidence: number; issues: string[]; method: string }> {
   const ext = file.filename.toLowerCase().split('.').pop() ?? '';
   const issues: string[] = [];
   let lines: CapturedLine[] = [], method = '';
+  const useLlm = await llm.active(companyId);
   try {
     if (['xlsx', 'xls'].includes(ext)) {
       const wb = new ExcelJS.Workbook(); await wb.xlsx.load(file.buffer as any);
@@ -149,11 +152,16 @@ export async function extractQuote(file: { buffer: Buffer; filename: string; mim
       const pdf = (await import('pdf-parse')).default;
       const text = (await pdf(file.buffer)).text;
       lines = parseText(text); method = 'pdf-text';
-      if (!lines.length && llm.enabled()) { const r = await llm.json('Extract supplier quotation lines. Return {"lines":[{"supplierPartNo","description","qty","unitPrice","leadTimeDays","availability"}]}', text.slice(0, 12000)); lines = (r?.data?.lines ?? []).map((l: any) => ({ ...l, confidence: 0.8, issues: [] })); method = 'pdf-llm'; }
+      if (!lines.length && useLlm) { const r = await llm.json('Extract supplier quotation lines. Return {"lines":[{"supplierPartNo","description","qty","unitPrice","leadTimeDays","availability"}]}', text.slice(0, 12000)); lines = (r?.data?.lines ?? []).map((l: any) => ({ ...l, confidence: 0.8, issues: [] })); method = 'pdf-llm'; }
       if (!lines.length) issues.push('No table recognised in this PDF. If it is a scan, enter the lines manually or upload Excel/CSV.');
     } else if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
-      method = 'image';
-      if (llm.enabled()) issues.push('Image extraction needs a vision-capable model; not available in this build'); else issues.push('Photo/scan quotations need OCR, which is not enabled. Upload Excel/CSV/PDF, or enter lines manually.');
+      method = 'image-ocr';
+      if (!useLlm) issues.push('Photo/scan quotations need the AI engine. Ask an administrator to set ai.provider to "llm" and configure LLM_BASE_URL / LLM_API_KEY, or upload Excel/CSV/PDF.');
+      else {
+        const r = await llm.json('You read a photographed or scanned supplier quotation. Return {"lines":[{"supplierPartNo":string,"description":string,"qty":number,"unitPrice":number,"leadTimeDays":number|null,"availability":"in_stock"|"on_order"|"unavailable"|null}]}. Use only what is printed; never invent rows or prices; skip totals and taxes. Numbers may be Arabic-Indic digits: convert them to Western digits.', 'Extract every priced line from this quotation.', [{ mime: file.mime || `image/${ext === 'jpg' ? 'jpeg' : ext}`, b64: file.buffer.toString('base64') }]);
+        lines = ((r?.data?.lines ?? []) as any[]).filter((l) => l && Number(l.unitPrice) > 0).map((l) => ({ supplierPartNo: String(l.supplierPartNo ?? ''), description: String(l.description ?? ''), qty: Number(l.qty) > 0 ? Number(l.qty) : 1, unitPrice: Number(l.unitPrice), leadTimeDays: l.leadTimeDays ?? undefined, availability: l.availability ?? undefined, confidence: 0.7, issues: ['Read from an image by AI; please verify every price'] }));
+        if (!lines.length) issues.push('No priced lines could be read from this image. Try a sharper photo or enter the lines manually.');
+      }
     } else issues.push(`Unsupported file type .${ext}`);
   } catch (e: any) { issues.push(`Could not read the file: ${e.message}`); }
   const confidence = lines.length ? Math.round((lines.reduce((s, l) => s + l.confidence, 0) / lines.length) * 100) / 100 : 0;
@@ -199,7 +207,16 @@ export async function askAssistant(ctx: Ctx, question: string) {
     return { ok: false, answer: 'I can only read data and answer questions; I cannot change anything.', suggestions: suggestions() };
   }
   const intent = INTENTS.find((i) => i.match.test(q));
-  if (!intent) return { ok: false, answer: 'I could not map that question to a report I am allowed to run. Try one of these:', suggestions: suggestions() };
+  if (!intent) {
+    // Not one of the fixed reports: let the AI engine write a read-only query, when it is switched on for this company.
+    if (await llm.active(ctx.companyId)) {
+      const f = await askFreeform(ctx, q);
+      await prisma.aiLog.create({ data: { companyId: ctx.companyId, feature: 'assistant', userId: ctx.userId, input: { q } as any, output: (f.ok ? { sql: f.sql, rows: f.rows.length } : { error: f.reason }) as any, latencyMs: Date.now() - t0, model: 'llm-text-to-sql', promptVersion: 'v1' } });
+      if (!f.ok) return { ok: false, answer: f.reason, suggestions: suggestions() };
+      return { ok: true, intent: 'freeform', result: { title: f.title, columns: f.columns, rows: f.rows, chart: f.chart, query: f.sql, note: 'Written by the AI engine from your question. Check the query before relying on the numbers.' } };
+    }
+    return { ok: false, answer: 'I can answer the reports below. For any other question, ask an administrator to switch on the AI engine (Settings → AI & part matching).', suggestions: suggestions() };
+  }
   if (!can(ctx.perms, { mod: intent.need.mod, slug: intent.need.slug }, 'read')) return { ok: false, answer: 'You do not have access to the data needed for this question.', suggestions: [] };
   const res = await intent.run(ctx.companyId, topN(q), q);
   await prisma.aiLog.create({ data: { companyId: ctx.companyId, feature: 'assistant', userId: ctx.userId, input: { q } as any, output: { intent: intent.id, rows: res.rows.length } as any, latencyMs: Date.now() - t0, model: 'semantic-intents', promptVersion: 'v1' } });

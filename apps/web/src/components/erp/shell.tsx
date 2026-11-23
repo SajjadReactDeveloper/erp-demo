@@ -23,7 +23,7 @@ const STAFF: Group[] = [
   { en: 'Main', ar: 'الرئيسية', items: [I('/app', 'layout-dashboard', 'Dashboard', 'لوحة المعلومات'), I('/app/request', 'inbox', 'Customer requests', 'طلبات العملاء', { slug: 'request' }), I('/app/quotation', 'file-text', 'Quotations', 'عروض الأسعار', { slug: 'quotation' }), I('/app/sales-order', 'shopping-bag', 'Sales orders', 'أوامر البيع', { slug: 'sales-order' }), I('/app/approvals', 'check-circle-2', 'Approvals', 'الاعتمادات', { count: 'approvals' })] },
   { en: 'Operations', ar: 'العمليات', items: [I('/app/rfq', 'send', 'Purchasing & RFQs', 'المشتريات وطلبات الأسعار', { slug: 'rfq' }), I('/app/delivery-note', 'truck', 'Logistics', 'الخدمات اللوجستية', { slug: 'delivery-note' }), I('/app/customer', 'users', 'Customers & suppliers', 'العملاء والموردون', { slug: 'customer' }), I('/app/pos', 'monitor-smartphone', 'Point of sale', 'نقطة البيع', { slug: 'pos-sale' })] },
   { en: 'Finance', ar: 'المالية', items: [I('/app/journal-entry', 'book-open-check', 'Accounting', 'المحاسبة', { slug: 'journal-entry' }), I('/app/collections', 'wallet', 'Credit & collections', 'الائتمان والتحصيل', { slug: 'promise-to-pay', count: 'holds' }), I('/app/invoice', 'receipt-text', 'ZATCA invoices', 'فواتير زاتكا', { slug: 'invoice' }), I('/app/reports/pnl', 'bar-chart-3', 'Reports', 'التقارير', { slug: 'journal-entry' })] },
-  { en: 'Intelligence', ar: 'الذكاء', items: [I('/app/assistant', 'sparkles', 'Assistant', 'المساعد الذكي'), I('/app/forecast', 'trending-up', 'Forecasting', 'التوقعات', { slug: 'forecast' })] },
+  { en: 'Intelligence', ar: 'الذكاء', items: [I('/app/dashboards/executive', 'chart-no-axes-combined', 'Analytics', 'التحليلات', { slug: 'invoice' }), I('/app/assistant', 'sparkles', 'Assistant', 'المساعد الذكي'), I('/app/forecast', 'trending-up', 'Forecasting', 'التوقعات', { slug: 'forecast' })] },
 ];
 const CUSTOMER: Group[] = [
   { en: 'Main', ar: 'الرئيسية', items: [I('/portal', 'layout-dashboard', 'Dashboard', 'لوحة المعلومات'), I('/portal/request', 'inbox', 'Requests', 'الطلبات'), I('/portal/quotation', 'file-text', 'Quotations', 'عروض الأسعار'), I('/portal/sales-order', 'shopping-bag', 'Orders', 'الأوامر')] },
@@ -40,16 +40,17 @@ const NAV: Record<ShellKind, { base: string; groups: Group[]; label: [string, st
 };
 export const DASH = [['executive', 'Executive', 'التنفيذية'], ['sales', 'Sales', 'المبيعات'], ['profitability', 'Profitability', 'الربحية'], ['expenses', 'Expenses', 'المصروفات'], ['receivables', 'Receivables', 'الذمم المدينة'], ['procurement', 'Procurement', 'المشتريات'], ['operations', 'Operations', 'العمليات'], ['history', 'History', 'التاريخ'], ['branch', 'Branches', 'الفروع']];
 export const REPORTS = [['trial-balance', 'Trial balance', 'ميزان المراجعة'], ['pnl', 'Profit & loss', 'قائمة الدخل'], ['balance-sheet', 'Balance sheet', 'الميزانية العمومية'], ['cash-flow', 'Cash flow', 'التدفقات النقدية'], ['vat', 'VAT', 'ضريبة القيمة المضافة'], ['ageing', 'Ageing', 'أعمار الديون'], ['supplier-performance', 'Supplier performance', 'أداء الموردين']];
-const ALL_MODULES = I('/app/modules', 'layout-grid', 'All modules', 'كل الوحدات');
-const ADMIN = [I('/app/imports', 'upload', 'Import data', 'استيراد البيانات'), I('/app/integrations', 'plug', 'Integrations', 'التكاملات'), I('/app/settings', 'sliders-horizontal', 'Settings', 'الإعدادات')];
+const ADMIN = [I('/app/users', 'users-round', 'Users', 'المستخدمون', { slug: 'user' }), I('/app/roles', 'shield-check', 'Roles & permissions', 'الأدوار والصلاحيات', { slug: 'role' }), I('/app/settings', 'sliders-horizontal', 'Settings', 'الإعدادات', { slug: 'setting' }), I('/app/integrations', 'plug', 'Integrations', 'التكاملات'), I('/app/imports', 'upload', 'Import data', 'استيراد البيانات')];
 
+const TITLES: Record<string, [string, string]> = { company: ['Organisation', 'المنشأة'], 'report-schedule': ['Scheduled reports', 'التقارير المجدولة'], template: ['Document templates', 'قوالب المستندات'], 'notification-rule': ['Notification rules', 'قواعد الإشعارات'], modules: ['All modules', 'كل الوحدات'] };
 function usePageTitle(kind: ShellKind) {
   const { lang, rl } = useT(); const path = usePathname();
   return useMemo(() => {
     const { base, groups } = NAV[kind]; const seg = path.split('/').filter(Boolean); const k = seg[1];
     if (!k) return lang === 'ar' ? 'لوحة المعلومات' : 'Dashboard';
     if (k === 'dashboards') return lang === 'ar' ? 'لوحات المعلومات' : 'Dashboards'; if (k === 'reports') return lang === 'ar' ? 'التقارير' : 'Reports';
-    const hit = [...groups.flatMap((g) => g.items), ...(kind === 'staff' ? [ALL_MODULES, ...ADMIN] : [])].find((i) => i.href === `${base}/${k}`); if (hit) return lang === 'ar' ? hit.ar : hit.en;
+    const hit = [...groups.flatMap((g) => g.items), ...(kind === 'staff' ? ADMIN : [])].find((i) => i.href === `${base}/${k}`); if (hit) return lang === 'ar' ? hit.ar : hit.en;
+    if (kind === 'staff' && TITLES[k]) return lang === 'ar' ? TITLES[k][1] : TITLES[k][0];
     const res = BY_SLUG[k]; return res ? rl(res, true) : '';
   }, [path, lang, rl, kind]);
 }
@@ -107,11 +108,12 @@ function Sidebar({ kind, onClose }: { kind: ShellKind; onClose: () => void }) {
   const holds = useQuery({ queryKey: ['holds-count'], queryFn: () => api<{ meta: { total: number } }>('/api/v1/r/credit-hold', { query: { limit: 1, 'f.status': 'held' } }), refetchInterval: 90000, enabled: staff && can({ mod: 'credit', slug: 'credit-hold' }) });
   const [openKey, setOpenKey] = useState<string | null>(null);
   const childKeys = useMemo(() => new Set(RESOURCES.flatMap((r) => r.children.map((c) => c.key))), []);
-  const areas = useMemo(() => [
-    { key: 'dash', icon: 'layout-dashboard', en: 'Dashboards', ar: 'لوحات المعلومات', links: DASH.map(([k, en, ar]) => ({ href: `/app/dashboards/${k}`, en, ar })) },
-    { key: 'rep', icon: 'file-bar-chart', en: 'Reports', ar: 'التقارير', links: REPORTS.map(([k, en, ar]) => ({ href: `/app/reports/${k}`, en, ar })) },
-    ...MODULES.filter((m) => m.release === 'R1').map((m) => ({ key: m.key, icon: m.icon, en: m.en, ar: m.ar, links: RESOURCES.filter((r) => r.mod === m.key && !r.sys && !childKeys.has(r.key) && can(r, 'read')).map((r) => ({ href: `/app/${r.slug}`, en: r.enPlural, ar: r.arPlural })) })),
-  ].filter((a) => a.links.length), [childKeys, can]);
+  // Setup & data: first-release areas only, without screens the main menu already links to.
+  const inMain = useMemo(() => new Set(groups.flatMap((g) => g.items.map((i) => i.slug)).filter(Boolean) as string[]), [groups]);
+  const SKIP = useMemo(() => new Set(['approval-request', 'user', 'role', 'setting', 'import-job', 'integration-message', 'attachment', 'notification', 'ai-log', 'outbox-event', 'branch', 'warehouse', 'cost-center']), []);
+  const RELABEL: Record<string, [string, string]> = useMemo(() => ({ company: ['Organisation', 'المنشأة'], 'report-schedule': ['Scheduled reports', 'التقارير المجدولة'] }), []);
+  const RENAME: Record<string, [string, string]> = useMemo(() => ({ platform: ['Configuration', 'التهيئة'] }), []);
+  const areas = useMemo(() => MODULES.filter((m) => m.release === 'R1' && !['finance', 'logistics'].includes(m.key)).map((m) => ({ key: m.key, icon: m.icon, en: RENAME[m.key]?.[0] ?? m.en, ar: RENAME[m.key]?.[1] ?? m.ar, links: RESOURCES.filter((r) => r.mod === m.key && !r.sys && r.release === 'R1' && !childKeys.has(r.key) && !inMain.has(r.slug) && !SKIP.has(r.slug) && can(r, 'read')).map((r) => ({ href: `/app/${r.slug}`, en: RELABEL[r.slug]?.[0] ?? r.enPlural, ar: RELABEL[r.slug]?.[1] ?? r.arPlural })) })).filter((x) => x.links.length), [childKeys, can, inMain, SKIP, RENAME, RELABEL]);
   const Item = ({ it }: { it: NavItem }) => {
     if (staff && it.slug && !can({ mod: 'x', slug: it.slug } as any) && !me?.permissions.includes('*') && !RESOURCES.find((r) => r.slug === it.slug && can(r, 'read'))) return null;
     const on = active(it.href); const n = it.count === 'approvals' ? pending.data?.data.length : it.count === 'holds' ? holds.data?.meta.total : 0;
@@ -135,15 +137,15 @@ function Sidebar({ kind, onClose }: { kind: ShellKind; onClose: () => void }) {
         {groups.map((g) => (
           <div key={g.en}><p className={cn(L, 'overline mb-1.5 px-3 text-onnavy-subtle/80')}>{lang === 'ar' ? g.ar : g.en}</p><hr className="mx-3 mb-2 hidden border-white/[0.06] md:block xl:hidden" /><div className="space-y-1">{g.items.map((it) => <Item key={it.href} it={it} />)}</div></div>
         ))}
-        {staff && <div className="md:hidden xl:block"><p className="overline mb-1.5 px-3 text-onnavy-subtle/80">{t('Modules')}</p><div className="space-y-0.5">{areas.map((a) => {
+        {staff && areas.length > 0 && <div className="md:hidden xl:block"><p className="overline mb-1.5 px-3 text-onnavy-subtle/80">{t('Setup & data')}</p><div className="space-y-0.5">{areas.map((a) => {
           const here = a.links.some((l) => path === l.href || path.startsWith(l.href + '/')); const o = openKey === a.key || (openKey === null && here);
           return (<div key={a.key}>
             <button onClick={() => setOpenKey(o ? '' : a.key)} aria-expanded={o} className={cn('group flex h-[38px] w-full items-center gap-3 rounded-sm px-3 text-[13.5px] font-medium transition-colors', here ? 'text-white' : 'text-onnavy-secondary hover:bg-white/[0.05] hover:text-white')}>
               <Icon name={a.icon} size={19} className={cn('shrink-0 transition-colors', here ? 'text-gold' : 'text-onnavy-subtle group-hover:text-white')} /><span className="flex-1 truncate text-start">{lang === 'ar' ? a.ar : a.en}</span><ChevronDown size={15} className={cn('shrink-0 text-onnavy-subtle transition-transform', o && 'rotate-180')} /></button>
-            {o && <div className="mb-1 ms-[21px] space-y-0.5 border-s border-white/10 ps-3">{a.links.map((l) => { const on = path === l.href || path.startsWith(l.href + '/'); return <Link key={l.href} href={l.href} onClick={onClose} className={cn('block truncate rounded-xs px-3 py-1.5 text-small transition-colors', on ? 'bg-white/[0.09] font-semibold text-white' : 'text-onnavy-muted hover:bg-white/[0.05] hover:text-white')}>{lang === 'ar' ? l.ar : l.en}</Link>; })}</div>}
+            {o && <div className="relative mb-1.5 mt-0.5 space-y-px before:absolute before:inset-y-1 before:start-[21px] before:w-px before:bg-white/10">{a.links.map((l) => { const on = path === l.href || path.startsWith(l.href + '/'); return <Link key={l.href} href={l.href} onClick={onClose} className={cn('flex h-8 items-center truncate rounded-sm pe-3 ps-[43px] text-[13px] transition-colors', on ? 'bg-white/[0.09] font-semibold text-white' : 'text-onnavy-muted hover:bg-white/[0.05] hover:text-white')}><span className="truncate">{lang === 'ar' ? l.ar : l.en}</span></Link>; })}</div>}
           </div>);
         })}</div></div>}
-        {staff && <div><p className={cn(L, 'overline mb-1.5 px-3 text-onnavy-subtle/80')}>{t('Workspace')}</p><div className="space-y-0.5">{ADMIN.map((a) => <Item key={a.href} it={a} />)}</div></div>}
+        {staff && <div><p className={cn(L, 'overline mb-1.5 px-3 text-onnavy-subtle/80')}>{t('Administration')}</p><div className="space-y-0.5">{ADMIN.map((a) => <Item key={a.href} it={a} />)}</div></div>}
       </nav>
       <div className="border-t border-white/[0.06] p-3">
         <div className="flex items-center gap-2.5 rounded-lg bg-white/[0.05] p-2.5 md:justify-center xl:justify-start"><Avatar name={me?.name} size={34} dark /><div className={cn(L, 'min-w-0 flex-1')}><p className="truncate text-small font-semibold leading-5 text-white" title={me?.name}>{me?.name}</p><p className="truncate text-caption text-onnavy-muted">{company ? (lang === 'ar' ? company.nameAr ?? company.name : company.name) : me?.role}</p></div>

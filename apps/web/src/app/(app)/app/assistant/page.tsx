@@ -10,6 +10,7 @@ import {
   Clock,
   Code2,
   Copy,
+  Info,
   History,
   Inbox,
   Languages,
@@ -720,6 +721,10 @@ function Answer({ r }: { r: any }) {
             </table>
           </div>
         </div>
+      )}
+
+      {r.note && (
+        <p className="flex items-start gap-2 border-t border-line bg-gold-light px-4 py-2 text-[12px] font-medium text-gold-text"><Info size={14} className="mt-0.5 shrink-0" />{r.note}</p>
       )}
 
       {/* Collapsible SQL code drawer */}
