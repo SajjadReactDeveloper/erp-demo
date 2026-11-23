@@ -137,7 +137,8 @@ export function registerPlatformRoutes(app: FastifyInstance) {
     if (!a) throw notFound('File');
     await parentFor(req.ctx, a.refType, a.refId);
     const buf = await readFile(join(UPLOAD_DIR, a.storageKey!)).catch(() => { throw notFound('File'); });
-    reply.header('Content-Type', a.mimeType ?? 'application/octet-stream').header('Content-Disposition', `${/^image|pdf/.test(a.mimeType ?? '') ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(a.fileName)}`).header('X-Content-Type-Options', 'nosniff');
+    const ext = extname(a.fileName).toLowerCase(); const SAFE = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' }; const inline = !!SAFE[ext];
+    reply.header('Content-Type', SAFE[ext] ?? 'application/octet-stream').header('Content-Security-Policy', "sandbox; default-src 'none'").header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(a.fileName)}`).header('X-Content-Type-Options', 'nosniff');
     return reply.send(buf);
   });
   app.delete('/api/v1/files/:id', { preHandler: authenticate }, async (req: any) => {

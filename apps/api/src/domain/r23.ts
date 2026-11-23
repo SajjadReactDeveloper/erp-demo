@@ -10,6 +10,16 @@ import { postJournal } from '../services/posting';
 import { sendMessage } from '../adapters';
 import { createCreditNote, issueInvoice, recalcInvoice } from './finance';
 
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+const privateIp = (ip: string) => /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|::1$|fc|fd|fe80)/i.test(ip);
+async function assertPublicHttps(raw: string) {
+  const bad = (m: string) => Object.assign(new Error(m), { code: 'BLOCKED_URL' });
+  let u: URL; try { u = new URL(raw); } catch { throw bad('Feed URL is not valid'); }
+  if (u.protocol !== 'https:') throw bad('Feed URL must use https');
+  const addrs = isIP(u.hostname) ? [{ address: u.hostname }] : await lookup(u.hostname, { all: true }).catch(() => { throw bad('Feed host could not be resolved'); });
+  if (addrs.some((a) => privateIp(a.address))) throw bad('Feed URL must point to a public host');
+}
 // ================= MARKETPLACE (SUP-04..08) =================
 A('VendorApplication.approve', async ({ ctx, tx, row }) => {
   if (await tx.supplier.findFirst({ where: { companyId: ctx.companyId, OR: [{ email: row.email }, ...(row.vatNumber ? [{ vatNumber: row.vatNumber }] : [])] } })) throw conflict('A supplier with this email or VAT number already exists');
@@ -43,8 +53,8 @@ A('CatalogueMatch.reject', async ({ tx, row }) => { if (!(await tx.catalogueMatc
 A('AvailabilityFeed.run', async ({ ctx, tx, row }) => {
   if (!row.url) throw bad('Add the feed URL first. File feeds are uploaded from the catalogue screen.');
   let items: any[] = [];
-  try { const r = await fetch(row.url, { signal: AbortSignal.timeout(8000) }); if (!r.ok) throw new Error(`HTTP ${r.status}`); items = (await r.json()) as any[]; if (!Array.isArray(items)) throw new Error('Feed must be a JSON array'); }
-  catch (e: any) { return { status: 'error', set: { lastError: e.message, lastRunAt: new Date() }, message: `Feed failed: ${e.message}` }; }
+  try { await assertPublicHttps(row.url); const r = await fetch(row.url, { signal: AbortSignal.timeout(8000), redirect: 'error' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); items = (await r.json()) as any[]; if (!Array.isArray(items)) throw new Error('Feed must be a JSON array'); }
+  catch (e: any) { const m = e?.code === 'BLOCKED_URL' ? e.message : 'The feed could not be fetched'; return { status: 'error', set: { lastError: m, lastRunAt: new Date() }, message: `Feed failed: ${m}` }; }
   let n = 0;
   for (const it of items.slice(0, 5000)) {
     const ex = await tx.catalogueItem.findFirst({ where: { supplierId: row.supplierId, supplierPartNo: String(it.supplierPartNo ?? it.partNo ?? '') } });

@@ -48,6 +48,7 @@ export async function sendMessage(db: Db, companyId: string, m: { channel: 'what
 
 // ---------------- payment gateway (CPT-06) ----------------
 export const PAYMENT_SECRET = process.env.PAYMENT_WEBHOOK_SECRET ?? 'dev-payment-secret';
+if (process.env.NODE_ENV === 'production' && (!process.env.PAYMENT_WEBHOOK_SECRET || process.env.PAYMENT_WEBHOOK_SECRET.length < 24 || !process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || /change-me|dev-only/.test(process.env.JWT_SECRET))) throw new Error('Refusing to start in production without strong JWT_SECRET and PAYMENT_WEBHOOK_SECRET');
 export const signPayload = (raw: string) => createHmac('sha256', PAYMENT_SECRET).update(raw).digest('hex');
 export async function createCheckout(db: Db, companyId: string, p: { invoiceId: string; invoiceNumber: string; amount: number; customerId: string }) {
   const id = 'chk_' + randomUUID().replace(/-/g, '').slice(0, 20);

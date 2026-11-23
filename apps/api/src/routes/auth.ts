@@ -77,7 +77,9 @@ export function registerAuth(app: FastifyInstance) {
   });
 
   // --- MFA (TOTP) setup ---
-  app.post('/api/v1/auth/mfa/setup', { preHandler: authenticate }, async (req: any) => {
+  app.post('/api/v1/auth/mfa/setup', { preHandler: authenticate, ...strict }, async (req: any) => {
+    const cur = await prisma.user.findUnique({ where: { id: req.ctx.userId } });
+    if (cur?.mfaEnabled && (!cur.mfaSecret || !authenticator.check(String(req.body?.code ?? ''), cur.mfaSecret))) throw new HttpError(403, 'mfa_required', 'Enter your current verification code to re-enrol');
     const secret = authenticator.generateSecret();
     const u = await prisma.user.update({ where: { id: req.ctx.userId }, data: { mfaSecret: secret, mfaEnabled: false } });
     return { secret, otpauthUrl: authenticator.keyuri(u.email, 'AutocQuick ERP', secret) };
@@ -119,9 +121,11 @@ export function registerAuth(app: FastifyInstance) {
     try { if ((jwt.verify(state, JWT_SECRET) as any).typ !== 'sso') throw 0; } catch { throw new HttpError(400, 'bad_state', 'Invalid SSO state'); }
     const cfg: any = await (await fetch(`${p.issuer}/.well-known/openid-configuration`)).json();
     const tok: any = await (await fetch(cfg.token_endpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: process.env[`OIDC_${p.env}_CLIENT_ID`]!, client_secret: process.env[`OIDC_${p.env}_CLIENT_SECRET`] ?? '', redirect_uri: `${process.env.WEB_ORIGIN}/auth/sso/${req.params.provider}` }) })).json();
-    const claims: any = jwt.decode(tok.id_token);
+    const claims: any = jwt.decode(tok.id_token); // received straight from the provider token endpoint over TLS (code flow); claims are still validated below
+    if (!claims || claims.aud !== process.env[`OIDC_${p.env}_CLIENT_ID`] || !String(claims.iss ?? '').startsWith(req.params.provider === 'google' ? 'https://accounts.google.com' : 'https://login.microsoftonline.com/') || (req.params.provider === 'microsoft' && process.env.OIDC_MICROSOFT_TENANT && claims.tid !== process.env.OIDC_MICROSOFT_TENANT) || (req.params.provider === 'google' && claims.email_verified !== true)) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
     const u = claims?.email ? await prisma.user.findFirst({ where: { email: String(claims.email).toLowerCase(), kind: 'staff', isActive: true } }) : null;
     if (!u) throw new HttpError(403, 'no_account', 'No ERP account is linked to this identity. Ask an administrator.');
+    if (u.mfaEnabled) return { mfaRequired: true, mfaToken: signToken(u, '5m', 'mfa') };
     await audit(prisma, { companyId: u.companyId, userId: u.id, ip: req.ip }, 'User', u.id, 'login', undefined, { sso: req.params.provider });
     return issue(u);
   });

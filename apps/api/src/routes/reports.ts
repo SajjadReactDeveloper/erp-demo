@@ -74,7 +74,7 @@ export const TABLES: Record<string, { need: [string, string]; run: (ctx: Ctx, qs
   } },
   ageing: { need: ['credit', 'credit-profile'], run: async (ctx, qs) => {
     const asOf = iso(qs.asOf, today()); const by = ['customer', 'rep', 'branch'].includes(qs.groupBy) ? qs.groupBy : 'customer';
-    const [b1, b2, b3] = await getSetting<number[]>(ctx.companyId, 'ageing.buckets', [30, 60, 90]);
+    const bk = (await getSetting<number[]>(ctx.companyId, 'ageing.buckets', [30, 60, 90])).map((x) => Math.trunc(Number(x))); const [b1, b2, b3] = bk.length === 3 && bk.every((x, i) => Number.isFinite(x) && x > 0 && (i === 0 || x > bk[i - 1])) ? bk : [30, 60, 90];
     const grp = by === 'rep' ? `COALESCE(u.name,'Unassigned')` : by === 'branch' ? `COALESCE(br.name,'No branch')` : `cu.name`;
     const rows = await q<any>(`SELECT ${grp} grp,
         SUM(CASE WHEN i."dueDate" >= $2 THEN i.balance ELSE 0 END)::float cur,
@@ -115,7 +115,8 @@ export async function customerStatement(companyId: string, cust: any, qs: any): 
   return { customer: { id: cust.id, name: cust.name, code: cust.code, vatNumber: cust.vatNumber }, opening: f(opening), closing: f(run), title: `Statement of account — ${cust.name}`, columns: [{ key: 'date', label: 'Date' }, { key: 'ref', label: 'Document' }, { key: 'type', label: 'Type' }, { key: 'due', label: 'Due' }, { key: 'debit', label: 'Debit', num: true }, { key: 'credit', label: 'Credit', num: true }, { key: 'balance', label: 'Balance', num: true }], rows: [{ date: from.toISOString().slice(0, 10), type: 'Opening balance', balance: f(opening) }, ...rows], totals: { type: 'Closing balance', balance: f(run) } };
 }
 
-const toHtml = (t: TableReport, lang: 'ar' | 'en') => `<!doctype html><html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><title>${t.title}</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;font-size:13px}th{background:#f3f4f6}td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}h1{font-size:18px}@media print{button{display:none}}</style></head><body><button onclick="print()">Print / Save PDF</button><h1>${t.title}</h1><table><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'n' : ''}">${c.label}</th>`).join('')}</tr></thead><tbody>${t.rows.map((r) => `<tr>${t.columns.map((c) => `<td class="${c.num ? 'n' : ''}">${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('')}${t.totals ? `<tr style="font-weight:700">${t.columns.map((c) => `<td class="${c.num ? 'n' : ''}">${t.totals![c.key] ?? ''}</td>`).join('')}</tr>` : ''}</tbody></table>${t.note ? `<p>${t.note}</p>` : ''}</body></html>`;
+const escH = (v: any) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+const toHtml = (t: TableReport, lang: 'ar' | 'en') => `<!doctype html><html lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><title>${escH(t.title)}</title><style>body{font-family:Tahoma,Arial,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;font-size:13px}th{background:#f3f4f6}td.n,th.n{text-align:end;font-variant-numeric:tabular-nums}h1{font-size:18px}@media print{button{display:none}}</style></head><body><button onclick="print()">Print / Save PDF</button><h1>${escH(t.title)}</h1><table><thead><tr>${t.columns.map((c) => `<th class="${c.num ? 'n' : ''}">${escH(c.label)}</th>`).join('')}</tr></thead><tbody>${t.rows.map((r) => `<tr>${t.columns.map((c) => `<td class="${c.num ? 'n' : ''}">${escH(r[c.key])}</td>`).join('')}</tr>`).join('')}${t.totals ? `<tr style="font-weight:700">${t.columns.map((c) => `<td class="${c.num ? 'n' : ''}">${escH(t.totals![c.key])}</td>`).join('')}</tr>` : ''}</tbody></table>${t.note ? `<p>${escH(t.note)}</p>` : ''}</body></html>`;
 
 export async function tableToFile(t: TableReport, format: string) {
   const data = [...t.rows, ...(t.totals ? [t.totals] : [])].map((r) => Object.fromEntries(t.columns.map((c) => [c.label, r[c.key] ?? ''])));
@@ -138,16 +139,20 @@ export function registerReportRoutes(app: FastifyInstance) {
   app.get('/api/v1/dashboards/executive', { preHandler: authenticate, ...lim }, async (req: any) => {
     const ctx: Ctx = req.ctx; need(ctx, 'finance', 'invoice');
     const c = ctx.companyId, now = new Date(), ms = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)), pms = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)), pme = new Date(ms.getTime() - 86400000), yms = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), 1)), yme = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth() + 1, 0));
-    const [mtd, prev, yoy, series, cash, ar, ap, top, rtq] = await Promise.all([
+    const [mtd, prev, yoy, series, cash, ar, ap, top, rtq, arM, rtqM] = await Promise.all([
       salesSum(c, ms, now), salesSum(c, pms, pme), salesSum(c, yms, yme), ledgerMonthly(c, 12),
       q<any>(`SELECT COALESCE(SUM(jl.debit - jl.credit),0)::float v FROM journal_line jl JOIN journal_entry je ON je.id = jl."entryId" JOIN account a ON a.id = jl."accountId" WHERE je."companyId" = $1 AND a."controlType" IN ('bank','cash')`, c).then((r) => r[0].v),
       q<any>(`SELECT COALESCE(SUM(balance),0)::float v, COALESCE(SUM(CASE WHEN "dueDate" < CURRENT_DATE THEN balance END),0)::float od FROM invoice WHERE "companyId" = $1 AND balance > 0 AND status IN ('cleared','reported','partially_paid')`, c).then((r) => r[0]),
       q<any>(`SELECT COALESCE(SUM(total - "paidAmount"),0)::float v FROM supplier_bill WHERE "companyId" = $1 AND status = 'posted' AND "docType" = 'bill'`, c).then((r) => r[0].v),
       q<any>(`SELECT cu.name, SUM(${SIGNED} * i.subtotal)::float v FROM invoice i JOIN customer cu ON cu.id = i."customerId" WHERE i."companyId" = $1 AND ${ISSUED} AND i."issueDate" >= $2 GROUP BY cu.name ORDER BY v DESC LIMIT 5`, c, ms),
       q<any>(`SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (qt."sentAt" - r."createdAt"))/3600),0)::float h FROM quotation qt JOIN request r ON r.id = qt."requestId" WHERE qt."companyId" = $1 AND qt."sentAt" IS NOT NULL AND qt."sentAt" > now() - interval '30 days'`, c).then((r) => r[0].h),
+      q<any>(`SELECT to_char(date_trunc('month', "issueDate"),'YYYY-MM') m, SUM(balance)::float v FROM invoice WHERE "companyId" = $1 AND balance > 0 AND status IN ('cleared','reported','partially_paid') GROUP BY m`, c),
+      q<any>(`SELECT to_char(date_trunc('month', r."createdAt"),'YYYY-MM') m, AVG(EXTRACT(EPOCH FROM (qt."sentAt" - r."createdAt"))/3600)::float v FROM quotation qt JOIN request r ON r.id = qt."requestId" WHERE qt."companyId" = $1 AND qt."sentAt" IS NOT NULL GROUP BY m`, c),
     ]);
+    // 12 month-aligned trend lines for the KPI sparklines
+    const trend = (rows: any[]) => series.map((x) => f(rows.find((r) => r.m === x.month)?.v ?? 0));
     const cur = series[series.length - 1], last = series[series.length - 2];
-    return { kpis: { salesMtd: f(mtd), salesPrev: f(prev), salesYoy: f(yoy), grossMargin: f(cur.grossProfit), grossMarginPct: cur.revenue ? f((cur.grossProfit / cur.revenue) * 100) : 0, netProfit: f(cur.netProfit), netProfitPrev: f(last?.netProfit ?? 0), cash: f(cash), receivables: f(ar.v), overdue: f(ar.od), payables: f(ap), requestToQuoteHours: f(rtq) }, series, topCustomers: top.map((t) => ({ name: t.name, value: f(t.v) })) };
+    return { kpis: { salesMtd: f(mtd), salesPrev: f(prev), salesYoy: f(yoy), grossMargin: f(cur.grossProfit), grossMarginPct: cur.revenue ? f((cur.grossProfit / cur.revenue) * 100) : 0, netProfit: f(cur.netProfit), netProfitPrev: f(last?.netProfit ?? 0), cash: f(cash), receivables: f(ar.v), overdue: f(ar.od), payables: f(ap), requestToQuoteHours: f(rtq) }, series, topCustomers: top.map((t) => ({ name: t.name, value: f(t.v) })), trends: { receivables: trend(arM), requestToQuote: trend(rtqM) } };
   });
 
   app.get('/api/v1/dashboards/sales', { preHandler: authenticate, ...lim }, async (req: any) => {

@@ -28,7 +28,7 @@ export function R(key: string, mod: string, en: string, ar: string, label: strin
     mod,
     en,
     ar,
-    enPlural: o.plural?.[0] ?? en + 's',
+    enPlural: o.plural?.[0] ?? (/(s|x|ch|sh)$/i.test(en) ? en + 'es' : /[^aeiou]y$/i.test(en) ? en.slice(0, -1) + 'ies' : en + 's'),
     arPlural: o.plural?.[1] ?? ar,
     label,
     icon,

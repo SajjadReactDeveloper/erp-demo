@@ -4,136 +4,178 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BY_SLUG, MODULES, RESOURCES } from '@erp/shared';
-import { Bell, ChevronDown, LogOut, Menu, Plus, Search, X } from 'lucide-react';
+import { Bell, Calendar, ChevronDown, Globe, LogOut, Menu, Search, X } from 'lucide-react';
 import { API_URL, api, getToken } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { useAuth, useRequireAuth } from '@/lib/auth';
 import { fmtDate, fmtHijri, fmtMoney, timeAgo } from '@/lib/format';
 import { Avatar, Button, EmptyState, Icon, Input, Progress, Skeleton, Spinner, cn, toast } from '@/components/ui';
+import { BrandMark } from '@/components/ui/brand';
 import { useDebounced } from './fields';
+import { BaseProvider } from './base';
 
+export type ShellKind = 'staff' | 'customer' | 'supplier';
 type NavItem = { href: string; icon: string; en: string; ar: string; slug?: string; count?: 'approvals' | 'holds' };
-const GROUPS: { en: string; ar: string; items: NavItem[] }[] = [
-  { en: 'Main', ar: 'الرئيسية', items: [
-    { href: '/app', icon: 'layout-dashboard', en: 'Dashboard', ar: 'لوحة المعلومات' }, { href: '/app/request', icon: 'inbox', en: 'Customer requests', ar: 'طلبات العملاء', slug: 'request' },
-    { href: '/app/quotation', icon: 'file-text', en: 'Quotations', ar: 'عروض الأسعار', slug: 'quotation' }, { href: '/app/sales-order', icon: 'shopping-bag', en: 'Sales orders', ar: 'أوامر البيع', slug: 'sales-order' },
-    { href: '/app/approvals', icon: 'check-circle-2', en: 'Approvals', ar: 'الاعتمادات', count: 'approvals' },
-  ] },
-  { en: 'Operations', ar: 'العمليات', items: [
-    { href: '/app/rfq', icon: 'send', en: 'Purchasing & RFQs', ar: 'المشتريات وطلبات الأسعار', slug: 'rfq' }, { href: '/app/delivery-note', icon: 'truck', en: 'Logistics', ar: 'الخدمات اللوجستية', slug: 'delivery-note' },
-    { href: '/app/customer', icon: 'users', en: 'Customers & suppliers', ar: 'العملاء والموردون', slug: 'customer' }, { href: '/app/pos', icon: 'monitor-smartphone', en: 'Point of sale', ar: 'نقطة البيع', slug: 'pos-sale' },
-  ] },
-  { en: 'Finance', ar: 'المالية', items: [
-    { href: '/app/journal-entry', icon: 'book-open-check', en: 'Accounting', ar: 'المحاسبة', slug: 'journal-entry' }, { href: '/app/collections', icon: 'wallet', en: 'Credit & collections', ar: 'الائتمان والتحصيل', slug: 'promise-to-pay', count: 'holds' },
-    { href: '/app/invoice', icon: 'receipt-text', en: 'ZATCA invoices', ar: 'فواتير زاتكا', slug: 'invoice' }, { href: '/app/reports/pnl', icon: 'bar-chart-3', en: 'Reports', ar: 'التقارير', slug: 'journal-entry' },
-  ] },
-  { en: 'Intelligence', ar: 'الذكاء', items: [
-    { href: '/app/assistant', icon: 'sparkles', en: 'Assistant', ar: 'المساعد الذكي' }, { href: '/app/forecast', icon: 'trending-up', en: 'Forecasting', ar: 'التوقعات', slug: 'forecast' },
-  ] },
-];
-const DASH = [['executive', 'Executive', 'التنفيذية'], ['sales', 'Sales', 'المبيعات'], ['profitability', 'Profitability', 'الربحية'], ['expenses', 'Expenses', 'المصروفات'], ['receivables', 'Receivables', 'الذمم المدينة'], ['procurement', 'Procurement', 'المشتريات'], ['operations', 'Operations', 'العمليات'], ['history', 'History', 'التاريخ'], ['branch', 'Branches', 'الفروع']];
-const REPORTS = [['trial-balance', 'Trial balance', 'ميزان المراجعة'], ['pnl', 'Profit & loss', 'قائمة الدخل'], ['balance-sheet', 'Balance sheet', 'الميزانية العمومية'], ['cash-flow', 'Cash flow', 'التدفقات النقدية'], ['vat', 'VAT', 'ضريبة القيمة المضافة'], ['ageing', 'Ageing', 'أعمار الديون'], ['supplier-performance', 'Supplier performance', 'أداء الموردين']];
-const ADMIN = [{ href: '/app/imports', icon: 'upload', en: 'Import data', ar: 'استيراد البيانات' }, { href: '/app/integrations', icon: 'plug', en: 'Integrations', ar: 'التكاملات' }, { href: '/app/settings', icon: 'sliders-horizontal', en: 'Settings', ar: 'الإعدادات' }];
+type Group = { en: string; ar: string; items: NavItem[] };
+const I = (href: string, icon: string, en: string, ar: string, extra: Partial<NavItem> = {}): NavItem => ({ href, icon, en, ar, ...extra });
 
-function usePageTitle() {
+const STAFF: Group[] = [
+  { en: 'Main', ar: 'الرئيسية', items: [I('/app', 'layout-dashboard', 'Dashboard', 'لوحة المعلومات'), I('/app/request', 'inbox', 'Customer requests', 'طلبات العملاء', { slug: 'request' }), I('/app/quotation', 'file-text', 'Quotations', 'عروض الأسعار', { slug: 'quotation' }), I('/app/sales-order', 'shopping-bag', 'Sales orders', 'أوامر البيع', { slug: 'sales-order' }), I('/app/approvals', 'check-circle-2', 'Approvals', 'الاعتمادات', { count: 'approvals' })] },
+  { en: 'Operations', ar: 'العمليات', items: [I('/app/rfq', 'send', 'Purchasing & RFQs', 'المشتريات وطلبات الأسعار', { slug: 'rfq' }), I('/app/delivery-note', 'truck', 'Logistics', 'الخدمات اللوجستية', { slug: 'delivery-note' }), I('/app/customer', 'users', 'Customers & suppliers', 'العملاء والموردون', { slug: 'customer' }), I('/app/pos', 'monitor-smartphone', 'Point of sale', 'نقطة البيع', { slug: 'pos-sale' })] },
+  { en: 'Finance', ar: 'المالية', items: [I('/app/journal-entry', 'book-open-check', 'Accounting', 'المحاسبة', { slug: 'journal-entry' }), I('/app/collections', 'wallet', 'Credit & collections', 'الائتمان والتحصيل', { slug: 'promise-to-pay', count: 'holds' }), I('/app/invoice', 'receipt-text', 'ZATCA invoices', 'فواتير زاتكا', { slug: 'invoice' }), I('/app/reports/pnl', 'bar-chart-3', 'Reports', 'التقارير', { slug: 'journal-entry' })] },
+  { en: 'Intelligence', ar: 'الذكاء', items: [I('/app/assistant', 'sparkles', 'Assistant', 'المساعد الذكي'), I('/app/forecast', 'trending-up', 'Forecasting', 'التوقعات', { slug: 'forecast' })] },
+];
+const CUSTOMER: Group[] = [
+  { en: 'Main', ar: 'الرئيسية', items: [I('/portal', 'layout-dashboard', 'Dashboard', 'لوحة المعلومات'), I('/portal/request', 'inbox', 'Requests', 'الطلبات'), I('/portal/quotation', 'file-text', 'Quotations', 'عروض الأسعار'), I('/portal/sales-order', 'shopping-bag', 'Orders', 'الأوامر')] },
+  { en: 'Billing', ar: 'الفواتير', items: [I('/portal/invoice', 'receipt-text', 'Invoices', 'الفواتير'), I('/portal/statement', 'scroll-text', 'Statement', 'كشف الحساب'), I('/portal/return-auth', 'undo-2', 'Returns', 'المرتجعات')] },
+  { en: 'Account', ar: 'الحساب', items: [I('/portal/vehicles', 'car', 'Vehicles', 'المركبات'), I('/portal/service-booking', 'calendar-check', 'Bookings', 'الحجوزات'), I('/portal/customer-address', 'map-pin', 'Addresses', 'العناوين')] },
+];
+const SUPPLIER: Group[] = [
+  { en: 'Main', ar: 'الرئيسية', items: [I('/supplier', 'layout-dashboard', 'Dashboard', 'لوحة المعلومات'), I('/supplier/rfqs', 'send', 'RFQs', 'طلبات الأسعار'), I('/supplier/supplier-quote', 'file-input', 'My quotes', 'عروضي')] },
+  { en: 'Orders & billing', ar: 'الأوامر والفواتير', items: [I('/supplier/purchase-order', 'shopping-basket', 'Purchase orders', 'أوامر الشراء'), I('/supplier/supplier-bill', 'receipt', 'Bills', 'الفواتير')] },
+  { en: 'Catalogue', ar: 'الكتالوج', items: [I('/supplier/catalogue-item', 'book-open', 'Catalogue', 'الكتالوج'), I('/supplier/availability-feed', 'rss', 'Feeds', 'الخلاصات')] },
+];
+const NAV: Record<ShellKind, { base: string; groups: Group[]; label: [string, string] }> = {
+  staff: { base: '/app', groups: STAFF, label: ['ERP', 'نظام ERP'] }, customer: { base: '/portal', groups: CUSTOMER, label: ['Customer portal', 'بوابة العملاء'] }, supplier: { base: '/supplier', groups: SUPPLIER, label: ['Supplier portal', 'بوابة الموردين'] },
+};
+export const DASH = [['executive', 'Executive', 'التنفيذية'], ['sales', 'Sales', 'المبيعات'], ['profitability', 'Profitability', 'الربحية'], ['expenses', 'Expenses', 'المصروفات'], ['receivables', 'Receivables', 'الذمم المدينة'], ['procurement', 'Procurement', 'المشتريات'], ['operations', 'Operations', 'العمليات'], ['history', 'History', 'التاريخ'], ['branch', 'Branches', 'الفروع']];
+export const REPORTS = [['trial-balance', 'Trial balance', 'ميزان المراجعة'], ['pnl', 'Profit & loss', 'قائمة الدخل'], ['balance-sheet', 'Balance sheet', 'الميزانية العمومية'], ['cash-flow', 'Cash flow', 'التدفقات النقدية'], ['vat', 'VAT', 'ضريبة القيمة المضافة'], ['ageing', 'Ageing', 'أعمار الديون'], ['supplier-performance', 'Supplier performance', 'أداء الموردين']];
+const ALL_MODULES = I('/app/modules', 'layout-grid', 'All modules', 'كل الوحدات');
+const ADMIN = [I('/app/imports', 'upload', 'Import data', 'استيراد البيانات'), I('/app/integrations', 'plug', 'Integrations', 'التكاملات'), I('/app/settings', 'sliders-horizontal', 'Settings', 'الإعدادات')];
+
+function usePageTitle(kind: ShellKind) {
   const { lang, rl } = useT(); const path = usePathname();
   return useMemo(() => {
-    const seg = path.split('/').filter(Boolean); const k = seg[1];
+    const { base, groups } = NAV[kind]; const seg = path.split('/').filter(Boolean); const k = seg[1];
     if (!k) return lang === 'ar' ? 'لوحة المعلومات' : 'Dashboard';
     if (k === 'dashboards') return lang === 'ar' ? 'لوحات المعلومات' : 'Dashboards'; if (k === 'reports') return lang === 'ar' ? 'التقارير' : 'Reports';
-    const hit = [...GROUPS.flatMap((g) => g.items), ...ADMIN].find((i) => i.href === `/app/${k}`); if (hit) return lang === 'ar' ? hit.ar : hit.en;
+    const hit = [...groups.flatMap((g) => g.items), ...(kind === 'staff' ? [ALL_MODULES, ...ADMIN] : [])].find((i) => i.href === `${base}/${k}`); if (hit) return lang === 'ar' ? hit.ar : hit.en;
     const res = BY_SLUG[k]; return res ? rl(res, true) : '';
-  }, [path, lang, rl]);
+  }, [path, lang, rl, kind]);
 }
 
-export function Shell({ children }: { children: ReactNode }) {
-  const { me, ready } = useRequireAuth('staff');
+/** One shell for the staff app and both portals: same sidebar, topbar and content frame. */
+export function Shell({ kind = 'staff', children }: { kind?: ShellKind; children: ReactNode }) {
+  const { me, ready } = useRequireAuth(kind);
   const { t, dir } = useT(); const path = usePathname(); const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
-  if (!ready || !me) return <div className="grid min-h-screen place-items-center"><Spinner className="h-8 w-8" /></div>;
+  if (!ready || !me) return <ShellSkeleton />;
   return (
-    <div className="min-h-screen md:flex">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:m-2 focus:rounded-sm focus:bg-gold focus:p-2 focus:text-navy">{t('Skip to content')}</a>
-      {open && <div className="fixed inset-0 z-30 bg-navy/50 md:hidden" onClick={() => setOpen(false)} />}
-      <aside aria-label="Main navigation" className={cn('no-print fixed inset-y-0 z-40 flex w-sidebar flex-col bg-navy transition-transform md:sticky md:top-0 md:z-20 md:h-screen md:w-rail md:translate-x-0 xl:w-sidebar', dir === 'rtl' ? 'right-0' : 'left-0', open ? 'translate-x-0' : dir === 'rtl' ? 'translate-x-full md:translate-x-0' : '-translate-x-full md:translate-x-0')}>
-        <Sidebar onClose={() => setOpen(false)} />
+    <BaseProvider value={NAV[kind].base}>
+      <div className="min-h-screen md:flex md:h-screen md:overflow-hidden">
+        <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:m-2 focus:rounded-sm focus:bg-gold focus:p-2 focus:text-navy">{t('Skip to content')}</a>
+        {open && <div className="fixed inset-0 z-30 bg-navy/50 backdrop-blur-[1px] md:hidden" onClick={() => setOpen(false)} />}
+        <aside aria-label="Main navigation" className={cn('no-print fixed inset-y-0 z-40 flex w-sidebar flex-col border-white/5 bg-gradient-to-b from-navy to-[#091A33] transition-transform md:sticky md:top-0 md:z-20 md:h-screen md:w-rail md:translate-x-0 xl:w-sidebar', dir === 'rtl' ? 'right-0 border-s' : 'left-0 border-e', open ? 'translate-x-0' : dir === 'rtl' ? 'translate-x-full md:translate-x-0' : '-translate-x-full md:translate-x-0')}>
+          <Sidebar kind={kind} onClose={() => setOpen(false)} />
+        </aside>
+        <div className="min-w-0 flex-1 md:flex md:h-screen md:flex-col">
+          <Topbar kind={kind} onMenu={() => setOpen(true)} />
+          <main id="main" className="w-full px-4 pb-6 pt-5 sm:px-6 sm:pt-6 md:min-h-0 md:flex-1 md:overflow-y-auto">{children}</main>
+        </div>
+      </div>
+    </BaseProvider>
+  );
+}
+
+/** Placeholder frame shown while the session loads: same geometry as the real shell. */
+function ShellSkeleton() {
+  const bar = 'rounded-md bg-white/10';
+  return (
+    <div className="min-h-screen md:flex" role="status" aria-label="Loading">
+      <aside className="hidden w-rail flex-col gap-3 bg-gradient-to-b from-navy to-[#091A33] p-4 md:flex xl:w-sidebar">
+        <div className="mb-4 flex items-center gap-3"><div className={`h-10 w-10 ${bar}`} /><div className="hidden flex-1 space-y-2 xl:block"><div className={`h-3.5 w-28 ${bar}`} /><div className={`h-2.5 w-16 ${bar}`} /></div></div>
+        {Array.from({ length: 11 }).map((_, i) => <div key={i} className={`h-9 ${bar}`} style={{ opacity: 1 - i * 0.06 }} />)}
       </aside>
       <div className="min-w-0 flex-1">
-        <Topbar onMenu={() => setOpen(true)} />
-        <main id="main" className="mx-auto w-full max-w-content px-4 pb-12 pt-6 sm:px-9 sm:pt-7">{children}</main>
+        <div className="flex items-center justify-between border-b border-line bg-card px-4 py-3 sm:px-6"><div className="space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3 w-44" /></div><div className="flex gap-2"><Skeleton className="hidden h-10 w-[340px] sm:block" /><Skeleton className="h-10 w-10" /></div></div>
+        <div className="space-y-5 px-4 pt-5 sm:px-6 sm:pt-6">
+          <div className="space-y-2"><Skeleton className="h-7 w-56" /><Skeleton className="h-3.5 w-80 max-w-full" /></div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr]">{[0, 1, 2, 3].map((i) => <div key={i} className="h-[200px] space-y-3 rounded-2xl border border-line bg-card p-5"><Skeleton className="h-11 w-11 rounded-md" /><Skeleton className="h-3 w-24" /><Skeleton className="h-8 w-36" /></div>)}</div>
+          <div className="grid gap-4 xl:grid-cols-[2fr_1fr]"><div className="h-[300px] rounded-2xl border border-line bg-card p-5"><Skeleton className="h-5 w-40" /><Skeleton className="mt-6 h-[200px] w-full" /></div><div className="h-[300px] rounded-2xl border border-line bg-card p-5"><Skeleton className="h-5 w-32" /></div></div>
+        </div>
       </div>
     </div>
   );
 }
 
-function Sidebar({ onClose }: { onClose: () => void }) {
-  const { lang, t } = useT(); const { me, company, can, logout } = useAuth(); const path = usePathname(); const [more, setMore] = useState<Record<string, boolean>>({});
+function Sidebar({ kind, onClose }: { kind: ShellKind; onClose: () => void }) {
+  const { lang, t } = useT(); const { me, company, can, logout } = useAuth(); const path = usePathname();
+  const staff = kind === 'staff'; const { base, groups, label } = NAV[kind];
   const L = 'inline md:hidden xl:inline'; // labels hide in the 76px rail (tablet widths)
-  const active = (h: string) => (h === '/app' ? path === '/app' : path === h || path.startsWith(h + '/') || (h === '/app/reports/pnl' && path.startsWith('/app/reports')));
-  const pending = useQuery({ queryKey: ['approvals', 'count'], queryFn: () => api<{ data: any[] }>('/api/v1/approvals/inbox'), refetchInterval: 60000, enabled: can({ mod: 'platform', slug: 'approval-request' }) });
-  const holds = useQuery({ queryKey: ['holds-count'], queryFn: () => api<{ meta: { total: number } }>('/api/v1/r/credit-hold', { query: { limit: 1, 'f.status': 'held' } }), refetchInterval: 90000, enabled: can({ mod: 'credit', slug: 'credit-hold' }) });
-  const target = useQuery({ queryKey: ['dash', 'sales-target'], queryFn: () => api<any>('/api/v1/dashboards/sales'), enabled: can({ mod: 'sales', slug: 'quotation' }), staleTime: 120000 });
-  const tg = (target.data?.targets ?? []) as any[]; const tAmt = tg.reduce((s, x) => s + x.target, 0), aAmt = tg.reduce((s, x) => s + x.achieved, 0);
+  const active = (h: string) => (h === base ? path === base : path === h || path.startsWith(h + '/') || (h === '/app/reports/pnl' && path.startsWith('/app/reports')));
+  const pending = useQuery({ queryKey: ['approvals', 'count'], queryFn: () => api<{ data: any[] }>('/api/v1/approvals/inbox'), refetchInterval: 60000, enabled: staff && can({ mod: 'platform', slug: 'approval-request' }) });
+  const holds = useQuery({ queryKey: ['holds-count'], queryFn: () => api<{ meta: { total: number } }>('/api/v1/r/credit-hold', { query: { limit: 1, 'f.status': 'held' } }), refetchInterval: 90000, enabled: staff && can({ mod: 'credit', slug: 'credit-hold' }) });
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const childKeys = useMemo(() => new Set(RESOURCES.flatMap((r) => r.children.map((c) => c.key))), []);
-  const modules = MODULES.map((m) => ({ ...m, items: RESOURCES.filter((r) => r.mod === m.key && !r.sys && !childKeys.has(r.key) && can(r, 'read')) })).filter((g) => g.items.length);
+  const areas = useMemo(() => [
+    { key: 'dash', icon: 'layout-dashboard', en: 'Dashboards', ar: 'لوحات المعلومات', links: DASH.map(([k, en, ar]) => ({ href: `/app/dashboards/${k}`, en, ar })) },
+    { key: 'rep', icon: 'file-bar-chart', en: 'Reports', ar: 'التقارير', links: REPORTS.map(([k, en, ar]) => ({ href: `/app/reports/${k}`, en, ar })) },
+    ...MODULES.filter((m) => m.release === 'R1').map((m) => ({ key: m.key, icon: m.icon, en: m.en, ar: m.ar, links: RESOURCES.filter((r) => r.mod === m.key && !r.sys && !childKeys.has(r.key) && can(r, 'read')).map((r) => ({ href: `/app/${r.slug}`, en: r.enPlural, ar: r.arPlural })) })),
+  ].filter((a) => a.links.length), [childKeys, can]);
   const Item = ({ it }: { it: NavItem }) => {
-    if (it.slug && !can({ mod: 'x', slug: it.slug } as any) && !me?.permissions.includes('*') && !RESOURCES.find((r) => r.slug === it.slug && can(r, 'read'))) return null;
+    if (staff && it.slug && !can({ mod: 'x', slug: it.slug } as any) && !me?.permissions.includes('*') && !RESOURCES.find((r) => r.slug === it.slug && can(r, 'read'))) return null;
     const on = active(it.href); const n = it.count === 'approvals' ? pending.data?.data.length : it.count === 'holds' ? holds.data?.meta.total : 0;
     return (
-      <Link href={it.href} onClick={onClose} title={lang === 'ar' ? it.ar : it.en} className={cn('group relative flex h-10 items-center gap-3 rounded-sm px-3 text-body font-medium transition-colors', on ? 'bg-navy-light text-white' : 'text-onnavy-secondary hover:bg-navy-hover hover:text-white', 'md:justify-center xl:justify-start')}>
-        {on && <span className="absolute inset-y-[10px] start-0 w-1 rounded-e-full bg-gold" />}
-        <Icon name={it.icon} size={20} className={on ? 'text-gold' : 'text-onnavy-subtle group-hover:text-white'} />
+      <Link href={it.href} onClick={onClose} title={lang === 'ar' ? it.ar : it.en} aria-current={on ? 'page' : undefined} className={cn('group relative flex h-10 items-center gap-3 rounded-sm px-3 text-[13.5px] font-medium transition-colors', on ? 'bg-white/[0.09] text-white' : 'text-onnavy-secondary hover:bg-white/[0.05] hover:text-white', 'md:justify-center xl:justify-start')}>
+        {on && <span className="absolute inset-y-2 start-0 w-[3px] rounded-e-full bg-gold" />}
+        <Icon name={it.icon} size={19} className={cn('shrink-0 transition-colors', on ? 'text-gold' : 'text-onnavy-subtle group-hover:text-white')} />
         <span className={cn(L, 'flex-1 truncate')}>{lang === 'ar' ? it.ar : it.en}</span>
-        {n ? <span className={cn('num h-5 min-w-5 rounded-full px-1.5 text-center text-[11px] font-semibold leading-5 md:absolute md:end-1 md:top-1 md:h-4 md:min-w-4 md:px-1 md:leading-4 xl:static xl:h-5 xl:min-w-5 xl:px-1.5 xl:leading-5', it.count === 'holds' ? 'bg-danger-bg text-danger' : 'bg-gold text-navy')}>{n}</span> : null}
+        {n ? <span className={cn('num h-5 min-w-5 rounded-xs px-1.5 text-center text-[11px] font-bold leading-5 md:absolute md:end-1.5 md:top-0.5 md:h-4 md:min-w-4 md:px-1 md:leading-4 xl:static xl:h-5 xl:min-w-5 xl:px-1.5 xl:leading-5', it.count === 'holds' ? 'bg-danger-bg text-danger' : 'bg-gold text-navy')}>{n}</span> : null}
       </Link>
     );
   };
   return (
     <>
-      <div className="flex items-center gap-3 px-4 pb-4 pt-6 md:justify-center xl:justify-start">
-        <Link href="/app" className="flex items-center gap-3" onClick={onClose}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-gold text-[15px] font-extrabold text-navy">AQ</span>
-          <span className={cn(L, 'leading-tight')}><b className="block text-[17px] font-bold text-white">AutocQuick</b><span className="text-[11px] font-semibold tracking-[0.12em] text-gold">ERP</span></span></Link>
+      <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-[18px] md:justify-center xl:justify-start">
+        <Link href={base} className="flex min-w-0 items-center gap-3" onClick={onClose}><BrandMark size={38} className="drop-shadow-[0_4px_12px_rgba(214,161,58,0.28)]" />
+          <span className={cn(L, 'min-w-0 leading-tight')}><b className="block truncate text-[17px] font-extrabold tracking-tight text-white">Autoc<span className="text-gold">Quick</span></b><span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-onnavy-muted">{lang === 'ar' ? label[1] : label[0]}</span></span></Link>
         <button onClick={onClose} className="ms-auto rounded-xs p-1 text-onnavy-muted md:hidden" aria-label="Close menu"><X size={20} /></button>
       </div>
-      <nav className="flex-1 space-y-5 overflow-y-auto px-4 pb-4 [scrollbar-color:#1D3B5C_transparent]" aria-label="Sections">
-        {GROUPS.map((g) => (
-          <div key={g.en}><p className={cn(L, 'overline mb-2 px-3 text-onnavy-subtle')}>{lang === 'ar' ? g.ar : g.en}</p><div className="space-y-0.5">{g.items.map((it) => <Item key={it.href} it={it} />)}</div></div>
+      <nav className="no-scrollbar flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-5 [mask-image:linear-gradient(to_bottom,transparent,#000_12px,#000_calc(100%-16px),transparent)]" aria-label="Sections">
+        {groups.map((g) => (
+          <div key={g.en}><p className={cn(L, 'overline mb-1.5 px-3 text-onnavy-subtle/80')}>{lang === 'ar' ? g.ar : g.en}</p><hr className="mx-3 mb-2 hidden border-white/[0.06] md:block xl:hidden" /><div className="space-y-1">{g.items.map((it) => <Item key={it.href} it={it} />)}</div></div>
         ))}
-        <div><p className={cn(L, 'overline mb-2 px-3 text-onnavy-subtle')}>{t('All modules')}</p>
-          <details className="group/d" open={Object.values(more).some(Boolean)}><summary className="flex h-10 cursor-pointer list-none items-center gap-3 rounded-sm px-3 text-body font-medium text-onnavy-secondary hover:bg-navy-hover hover:text-white md:justify-center xl:justify-start"><Icon name="layout-grid" size={20} className="text-onnavy-subtle" /><span className={cn(L, 'flex-1')}>{t('Dashboards & modules')}</span><ChevronDown size={15} className="hidden group-open/d:rotate-180 xl:block" /></summary>
-            <div className="mt-1 space-y-0.5 md:hidden xl:block">
-              <SubGroup id="dash" title={t('Dashboards')} open={more} set={setMore}>{DASH.map(([k, en, ar]) => <Sub key={k} href={`/app/dashboards/${k}`} label={lang === 'ar' ? ar : en} on={path === `/app/dashboards/${k}`} close={onClose} />)}</SubGroup>
-              <SubGroup id="rep" title={t('Reports')} open={more} set={setMore}>{REPORTS.map(([k, en, ar]) => <Sub key={k} href={`/app/reports/${k}`} label={lang === 'ar' ? ar : en} on={path === `/app/reports/${k}`} close={onClose} />)}</SubGroup>
-              {modules.map((m) => <SubGroup key={m.key} id={m.key} title={lang === 'ar' ? m.ar : m.en} open={more} set={setMore} badge={m.release !== 'R1' ? m.release : undefined}>{m.items.map((r) => <Sub key={r.slug} href={`/app/${r.slug}`} label={lang === 'ar' ? r.arPlural : r.enPlural} on={path.startsWith(`/app/${r.slug}`)} close={onClose} />)}</SubGroup>)}
-            </div></details></div>
-        <div className="space-y-0.5">{ADMIN.map((a) => <Item key={a.href} it={a} />)}</div>
+        {staff && <div className="md:hidden xl:block"><p className="overline mb-1.5 px-3 text-onnavy-subtle/80">{t('Modules')}</p><div className="space-y-0.5">{areas.map((a) => {
+          const here = a.links.some((l) => path === l.href || path.startsWith(l.href + '/')); const o = openKey === a.key || (openKey === null && here);
+          return (<div key={a.key}>
+            <button onClick={() => setOpenKey(o ? '' : a.key)} aria-expanded={o} className={cn('group flex h-[38px] w-full items-center gap-3 rounded-sm px-3 text-[13.5px] font-medium transition-colors', here ? 'text-white' : 'text-onnavy-secondary hover:bg-white/[0.05] hover:text-white')}>
+              <Icon name={a.icon} size={19} className={cn('shrink-0 transition-colors', here ? 'text-gold' : 'text-onnavy-subtle group-hover:text-white')} /><span className="flex-1 truncate text-start">{lang === 'ar' ? a.ar : a.en}</span><ChevronDown size={15} className={cn('shrink-0 text-onnavy-subtle transition-transform', o && 'rotate-180')} /></button>
+            {o && <div className="mb-1 ms-[21px] space-y-0.5 border-s border-white/10 ps-3">{a.links.map((l) => { const on = path === l.href || path.startsWith(l.href + '/'); return <Link key={l.href} href={l.href} onClick={onClose} className={cn('block truncate rounded-xs px-3 py-1.5 text-small transition-colors', on ? 'bg-white/[0.09] font-semibold text-white' : 'text-onnavy-muted hover:bg-white/[0.05] hover:text-white')}>{lang === 'ar' ? l.ar : l.en}</Link>; })}</div>}
+          </div>);
+        })}</div></div>}
+        {staff && <div><p className={cn(L, 'overline mb-1.5 px-3 text-onnavy-subtle/80')}>{t('Workspace')}</p><div className="space-y-0.5">{ADMIN.map((a) => <Item key={a.href} it={a} />)}</div></div>}
       </nav>
-      <div className="space-y-3 p-4">
-        {tAmt > 0 && <div className="rounded-lg bg-navy-hover p-4 md:hidden xl:block"><div className="flex items-center justify-between text-caption"><span className="font-semibold text-onnavy-muted">{t('Monthly target')}</span><span className="num font-bold text-white">{Math.round((aAmt / tAmt) * 100)}%</span></div><Progress value={(aAmt / tAmt) * 100} className="mt-2.5 !bg-navy" /><p className="num mt-2 text-caption text-onnavy-muted">{fmtMoney(aAmt, lang)} / {fmtMoney(tAmt, lang)}</p></div>}
-        <div className="flex items-center gap-3 rounded-lg px-1 md:justify-center xl:justify-start"><Avatar name={me?.name} size={36} dark /><div className={cn(L, 'min-w-0 flex-1')}><p className="truncate text-small font-semibold text-white">{me?.name}</p><p className="truncate text-caption text-onnavy-muted">{company ? (lang === 'ar' ? company.nameAr ?? company.name : company.name) : me?.role}</p></div>
-          <button onClick={logout} className={cn(L, 'rounded-xs p-1.5 text-onnavy-subtle hover:bg-navy-hover hover:text-white')} aria-label={t('Sign out')} title={t('Sign out')}><LogOut size={17} /></button></div>
+      <div className="border-t border-white/[0.06] p-3">
+        <div className="flex items-center gap-2.5 rounded-lg bg-white/[0.05] p-2.5 md:justify-center xl:justify-start"><Avatar name={me?.name} size={34} dark /><div className={cn(L, 'min-w-0 flex-1')}><p className="truncate text-small font-semibold leading-5 text-white" title={me?.name}>{me?.name}</p><p className="truncate text-caption text-onnavy-muted">{company ? (lang === 'ar' ? company.nameAr ?? company.name : company.name) : me?.role}</p></div>
+          <button onClick={logout} className={cn(L, 'rounded-xs p-1.5 text-onnavy-subtle transition-colors hover:bg-white/10 hover:text-white')} aria-label={t('Sign out')} title={t('Sign out')}><LogOut size={17} className="rtl:-scale-x-100" /></button></div>
       </div>
     </>
   );
 }
-function SubGroup({ id, title, open, set, children, badge }: { id: string; title: string; open: Record<string, boolean>; set: (v: any) => void; children: ReactNode; badge?: string }) {
-  const o = !!open[id];
-  return <div><button onClick={() => set({ ...open, [id]: !o })} aria-expanded={o} className="flex h-9 w-full items-center gap-2 rounded-sm px-3 text-small font-semibold text-onnavy-muted hover:text-white"><span className="flex-1 text-start">{title}</span>{badge && <span className="rounded-full bg-navy-light px-1.5 text-[10px] font-semibold text-gold">{badge}</span>}<ChevronDown size={14} className={cn('transition', o && 'rotate-180')} /></button>{o && <div className="ms-3 space-y-0.5 border-s border-navy-light ps-2">{children}</div>}</div>;
-}
-const Sub = ({ href, label, on, close }: { href: string; label: string; on: boolean; close: () => void }) => <Link href={href} onClick={close} className={cn('block truncate rounded-xs px-3 py-1.5 text-small transition', on ? 'bg-navy-light font-semibold text-white' : 'text-onnavy-muted hover:bg-navy-hover hover:text-white')}>{label}</Link>;
 
-function Topbar({ onMenu }: { onMenu: () => void }) {
-  const { t, lang, setLang } = useT(); const { can } = useAuth(); const router = useRouter(); const title = usePageTitle();
+function Topbar({ kind, onMenu }: { kind: ShellKind; onMenu: () => void }) {
+  const { t, lang, setLang } = useT(); const { can } = useAuth(); const router = useRouter(); const title = usePageTitle(kind);
   const switchLang = () => { const n = lang === 'ar' ? 'en' : 'ar'; setLang(n); api('/api/v1/auth/preferences', { method: 'PATCH', body: { locale: n } }).catch(() => null); };
-  const now = new Date();
+  const now = new Date(); const cta = kind === 'staff' ? (can({ mod: 'sales', slug: 'request' }, 'create') ? '/app/request/new' : null) : kind === 'customer' ? '/portal/request/new' : null;
   return (
-    <header className="no-print sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-card px-4 py-3.5 sm:px-9">
+    <header className="no-print sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-card/90 px-4 py-3 backdrop-blur sm:px-6">
       <Button variant="ghost" size="sm" className="md:hidden" onClick={onMenu} aria-label="Menu"><Menu size={20} /></Button>
-      <div className="min-w-0 shrink-0"><h2 className="truncate text-[17px] font-bold leading-6 sm:text-[19px]">{title}</h2><p className="hidden truncate text-caption text-muted sm:block">{fmtDate(now, 'en').replace(/^/, '')} · <span lang="ar">{fmtHijri(now, 'ar')}</span></p></div>
-      <div className="ms-auto flex min-w-0 flex-1 items-center justify-end gap-2"><div className="hidden w-full max-w-[340px] sm:block"><GlobalSearch /></div>
-        <Button variant="secondary" size="sm" onClick={switchLang} aria-label={t('Language')} className="h-10 px-3 text-small">{lang === 'ar' ? 'English' : 'عربي'}</Button>
+      <div className="min-w-0 shrink-0">
+        <h2 className="truncate text-[17px] font-bold leading-tight tracking-tight text-fg sm:text-[18px]">{title}</h2>
+        <p className="num mt-0.5 hidden items-center gap-2 truncate text-caption text-muted sm:flex">
+          <Calendar size={12} className="shrink-0 text-muted/75" aria-hidden />
+          <span>{fmtDate(now, lang)}</span>
+          <span className="h-3 w-px shrink-0 bg-line" aria-hidden />
+          <span>{fmtHijri(now, lang)}</span>
+        </p>
+      </div>
+      <div className="ms-auto flex min-w-0 flex-1 items-center justify-end gap-2">{kind === 'staff' && <div className="hidden w-full max-w-[360px] sm:block"><GlobalSearch /></div>}
+        <Button variant="secondary" onClick={switchLang} aria-label={t('Language')} className="gap-1.5 !px-3 !font-medium">
+          <Globe size={15} className="shrink-0 text-muted" />
+          <span lang={lang === 'ar' ? 'en' : 'ar'} dir={lang === 'ar' ? 'ltr' : 'rtl'} className={lang === 'ar' ? 'font-sans text-[13px] leading-none' : 'font-arabic pb-[1px] text-[13px] leading-none'}>{lang === 'ar' ? 'English' : 'العربية'}</span>
+        </Button>
         <NotificationBell />
-        {can({ mod: 'sales', slug: 'request' }, 'create') && <Button icon="plus" onClick={() => router.push('/app/request/new')} className="hidden sm:inline-flex">{t('New request')}</Button>}</div>
+        {cta && <Button icon="plus" onClick={() => router.push(cta)} className="hidden sm:inline-flex">{t('New request')}</Button>}</div>
     </header>
   );
 }
@@ -144,8 +186,8 @@ function GlobalSearch() {
   useEffect(() => { const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); }; const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); inp.current?.focus(); setOpen(true); } }; document.addEventListener('mousedown', h); document.addEventListener('keydown', k); return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k); }; }, []);
   return (
     <div ref={box} className="relative w-full">
-      <Search size={17} className="pointer-events-none absolute start-3.5 top-3 text-strong" /><Input ref={inp} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={t('Search anything...')} className="ps-10 pe-12" aria-label={t('Search anything...')} />
-      <kbd className="pointer-events-none absolute end-3 top-2.5 hidden rounded-xs border border-line bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted lg:block">Ctrl K</kbd>
+      <Search size={16} className="pointer-events-none absolute start-3.5 top-1/2 -translate-y-1/2 text-strong" /><Input ref={inp} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder={t('Search anything...')} className="!h-10 !rounded-sm ps-10 pe-16" aria-label={t('Search anything...')} />
+      <kbd className="pointer-events-none absolute end-2.5 top-1/2 hidden -translate-y-1/2 items-center rounded-xs border border-line bg-card px-1.5 py-1 font-mono text-[10px] font-medium leading-none text-muted lg:inline-flex">Ctrl K</kbd>
       {open && q.trim().length >= 2 && (
         <div className="absolute z-40 mt-2 max-h-[70vh] w-[min(92vw,420px)] overflow-y-auto rounded-2xl border border-line bg-card p-2 shadow-pop animate-in">
           {r.isLoading ? <div className="space-y-2 p-3"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-2/3" /></div> : r.isError ? <p className="p-3 text-small text-danger">{(r.error as any).message}</p> : r.data!.data.length === 0 ? <p className="p-4 text-center text-small text-muted">{t('No results found')}</p> : r.data!.data.map((g) => (
@@ -163,6 +205,7 @@ function NotificationBell() {
   useEffect(() => { const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
   useEffect(() => {
     const token = getToken(); if (!token) return; const es = new EventSource(`${API_URL}/api/v1/stream?access_token=${encodeURIComponent(token)}`);
+    es.addEventListener('delivery', () => qc.invalidateQueries({ queryKey: ['order-track'] }));
     es.addEventListener('notification', (e: MessageEvent) => { const n = JSON.parse(e.data); qc.invalidateQueries({ queryKey: ['notif-count'] }); qc.invalidateQueries({ queryKey: ['notifs'] }); toast(n.title, { description: n.body, action: n.link ? { label: t('Open'), onClick: () => router.push(n.link) } : undefined }); });
     return () => es.close(); // eslint-disable-next-line
   }, []);
@@ -170,7 +213,7 @@ function NotificationBell() {
   const n = count.data?.count ?? 0;
   return (
     <div ref={box} className="relative">
-      <Button variant="secondary" size="sm" onClick={() => setOpen(!open)} aria-label={`${t('Notifications')}${n ? ` (${n})` : ''}`} className="relative h-10 w-10 !px-0"><Bell size={18} />{n > 0 && <span className="absolute end-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-card bg-gold" />}</Button>
+      <Button variant="secondary" onClick={() => setOpen(!open)} aria-label={`${t('Notifications')}${n ? ` (${n})` : ''}`} className="relative w-10 !px-0"><Bell size={18} />{n > 0 && <span className="absolute end-2 top-2 h-2.5 w-2.5 rounded-full border-2 border-card bg-gold" />}</Button>
       {open && (
         <div className="absolute end-0 z-40 mt-2 w-[min(92vw,380px)] rounded-2xl border border-line bg-card shadow-pop animate-in">
           <div className="flex items-center justify-between px-5 py-4"><b className="text-card-title">{t('Notifications')}</b>{n > 0 && <button className="text-small font-semibold text-navy hover:underline" onClick={() => read()}>{t('Mark all read')}</button>}</div>
@@ -180,4 +223,3 @@ function NotificationBell() {
     </div>
   );
 }
-void Plus;

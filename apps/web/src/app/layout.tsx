@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from 'next';
-import { IBM_Plex_Mono, IBM_Plex_Sans_Arabic, Plus_Jakarta_Sans } from 'next/font/google';
+import { IBM_Plex_Mono, Cairo, Manrope } from 'next/font/google';
 import { cookies } from 'next/headers';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
-const jakarta = Plus_Jakarta_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'], variable: '--font-jakarta', display: 'swap' });
-const arabic = IBM_Plex_Sans_Arabic({ subsets: ['arabic'], weight: ['400', '500', '600'], variable: '--font-arabic', display: 'swap' });
+const jakarta = Manrope({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800'], variable: '--font-jakarta', display: 'swap' });
+const arabic = Cairo({ subsets: ['arabic'], weight: ['400', '500', '600', '700'], variable: '--font-arabic', display: 'swap' });
 const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['500'], variable: '--font-mono', display: 'swap' });
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 

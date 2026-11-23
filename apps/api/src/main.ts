@@ -34,7 +34,7 @@ await app.register(rateLimit, {
   global: true,
   max: Number(process.env.RATE_LIMIT_MAX ?? 600),
   timeWindow: '1 minute',
-  keyGenerator: (req) => (req.headers.authorization ? `t:${req.headers.authorization.slice(-24)}` : `ip:${req.ip}`),
+  keyGenerator: (req) => `ip:${req.ip}`, // never key on client-supplied header content: it would let an attacker rotate the key and dodge login/MFA limits
   errorResponseBuilder: (_req, ctx) => ({ statusCode: 429, error: { code: 'rate_limited', message: `Too many requests. Try again in ${Math.ceil(ctx.ttl / 1000)}s.` } }),
 });
 await app.register(multipart, { limits: { fileSize: 15 * 1024 * 1024, files: 10 } });

@@ -118,7 +118,7 @@ export function registerOpsRoutes(app: FastifyInstance) {
           const gr = await prisma.$transaction((tx) => createRow(tx, ctx, BY_KEY.GoodsReceipt, { poId: p.poId, deliveryRef: p.deliveryRef ?? id, notes: p.notes, status: 'draft', children: { GrLine: p.lines } }));
           const r: any = await runAction(ctx, BY_KEY.GoodsReceipt, gr.id, 'confirm', {}); out = { id: gr.id, status: r.data.status };
         }
-        else if (['dispatch', 'pod', 'fail'].includes(e.type)) { const act = e.type === 'pod' ? 'deliver' : e.type; const r: any = await runAction(ctx, BY_KEY.DeliveryNote, p.deliveryNoteId, act, { ...p, capturedAt: e.at, deviceId: e.deviceId }); out = { status: r.data.status, invoiceId: r.result?.invoiceId }; }
+        else if (['dispatch', 'pod', 'fail'].includes(e.type)) { const act = e.type === 'pod' ? 'deliver' : e.type; const r: any = await runAction(ctx, BY_KEY.DeliveryNote, p.deliveryNoteId, act, { ...p, capturedAt: e.at, deviceId: e.deviceId }, { ...scopeWhere(BY_KEY.DeliveryNote, ctx), ...(ctx.role === 'driver' ? { driverId: ctx.userId } : {}) }); out = { status: r.data.status, invoiceId: r.result?.invoiceId }; }
         else throw bad(`Unknown event type ${e.type}`);
       } catch (err: any) { status = 'error'; message = err.message; code = err.code; if (err.code === 'invalid_state') status = 'ok', out = { note: 'already applied', message }; }
       await prisma.integrationMessage.create({ data: { companyId: ctx.companyId, provider: 'sync', direction: 'in', endpoint: e.type, requestBody: e as any, responseBody: out ?? { message, code }, status: status === 'ok' ? 'ok' : 'error', error: message, idempotencyKey: id } });
@@ -323,7 +323,7 @@ export function registerOpsRoutes(app: FastifyInstance) {
   });
   // dev-only fake gateway: the web /pay page calls this, which signs and applies the payment like a real gateway webhook
   app.post('/api/v1/public/fake-gateway/:id/complete', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req: any) => {
-    if (process.env.PAYMENT_GATEWAY_URL) throw notFound('Route');
+    if (process.env.NODE_ENV === 'production' || process.env.PAYMENT_GATEWAY_URL || process.env.ENABLE_FAKE_GATEWAY === '0') throw notFound('Route'); // development stand-in only
     const { invoiceId, amount } = req.body ?? {}; if (!invoiceId || !(Number(amount) > 0)) throw bad('invoiceId and amount are required');
     const r = await applyOnlinePayment({ txnId: String(req.params.id), invoiceId, amount: Number(amount) });
     return { ok: true, ...r };

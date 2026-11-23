@@ -27,8 +27,9 @@ const axis = { tick: { fontSize: 11, fill: AXIS }, tickLine: false } as const;
 interface P { title: string; sub?: string; data?: any[]; loading?: boolean; error?: unknown; onRetry?: () => void; h?: number; xKey?: string; series?: { key: string; label: string; color?: string }[]; stacked?: boolean; actions?: React.ReactNode; highlightLast?: boolean; bare?: boolean }
 export function BarCard({ data = [], xKey = 'name', series = [{ key: 'value', label: 'Value' }], stacked, highlightLast, ...p }: P) {
   const { lang } = useT();
-  return <Shell {...p} empty={!data.length}><ResponsiveContainer><BarChart data={data} margin={{ left: 0, right: 8 }}><CartesianGrid stroke={GRID} vertical={false} /><XAxis dataKey={xKey} {...axis} interval={0} height={44} angle={-12} textAnchor="end" axisLine={false} /><YAxis {...axis} axisLine={false} width={48} tickFormatter={fmtCompact} /><Tooltip content={<Tip lang={lang} />} cursor={{ fill: '#F1F5F9' }} />{series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
-    {series.map((s, i) => <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color ?? [NAVY, GOLD, NAVY_LIGHT][i]} radius={[6, 6, 0, 0]} stackId={stacked ? 'a' : undefined} maxBarSize={40}>{i === 0 && series.length === 1 && data.map((_, j) => <Cell key={j} fill={highlightLast !== false && j === data.length - 1 && data.length > 3 ? GOLD : NAVY} />)}</Bar>)}</BarChart></ResponsiveContainer></Shell>;
+  const shortLabels = data.length > 0 && data.every((d) => String(d[xKey] ?? '').length <= 6);
+  return <Shell {...p} empty={!data.length}><ResponsiveContainer><BarChart data={data} margin={{ left: 0, right: 8 }}><defs><linearGradient id="bar-navy" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#183A66" /><stop offset="100%" stopColor={NAVY} /></linearGradient><linearGradient id="bar-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#E9C063" /><stop offset="100%" stopColor="#C48F29" /></linearGradient></defs><CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} /><XAxis dataKey={xKey} {...axis} interval={0} height={shortLabels ? 28 : 44} angle={shortLabels ? 0 : -12} textAnchor={shortLabels ? 'middle' : 'end'} axisLine={false} /><YAxis {...axis} axisLine={false} width={48} tickFormatter={fmtCompact} /><Tooltip content={<Tip lang={lang} />} cursor={{ fill: '#F1F5F9', opacity: 0.7 }} />{series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
+    {series.map((s, i) => <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color ?? [NAVY, GOLD, NAVY_LIGHT][i]} radius={[3, 3, 0, 0]} stackId={stacked ? 'a' : undefined} maxBarSize={36}>{i === 0 && series.length === 1 && data.map((_, j) => <Cell key={j} fill={highlightLast !== false && j === data.length - 1 && data.length > 3 ? 'url(#bar-gold)' : 'url(#bar-navy)'} />)}</Bar>)}</BarChart></ResponsiveContainer></Shell>;
 }
 export function LineCard({ data = [], xKey = 'month', series = [{ key: 'value', label: 'Value' }], area, ...p }: P & { area?: boolean }) {
   const { lang } = useT();
@@ -44,16 +45,45 @@ export function PieCard({ data = [], ...p }: P) {
 
 /** Tiny sparkline for KPI cards (system §5.3) */
 export function Sparkline({ data, color = NAVY, h = 38 }: { data: number[]; color?: string; h?: number }) {
-  const rows = data.map((v, i) => ({ i, v }));
-  return <div style={{ height: h }} dir="ltr" aria-hidden><ResponsiveContainer><AreaChart data={rows} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}><defs><linearGradient id={`sp-${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#sp-${color.slice(1)})`} dot={false} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>;
+  const rows = data.map((v, i) => ({ i, v })); const lo = Math.min(...data, 0), hi = Math.max(...data, 1), pad = (hi - lo) * 0.1; // pad the domain so a flat run at the minimum isn't clipped by the chart edge
+  return <div style={{ height: h }} dir="ltr" aria-hidden><ResponsiveContainer><AreaChart data={rows} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}><defs><linearGradient id={`sp-${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><YAxis hide domain={[lo - pad, hi + pad]} /><Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#sp-${color.slice(1)})`} dot={false} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>;
 }
 /** Half-ring gauge (system §5.8) */
-export function Gauge({ value, label, size = 200 }: { value: number; label?: string; size?: number }) {
-  const v = Math.max(0, Math.min(100, value)); const r = 78, c = Math.PI * r;
+export function Gauge({ value, label, size = 200, marker, showBounds }: { value: number; label?: string; size?: number; marker?: number; showBounds?: boolean }) {
+  const v = Math.max(0, Math.min(100, value));
+  const r = 82, cx = 110, cy = 102, c = Math.PI * r;
+  const pctText = v > 0 && v < 10 ? v.toFixed(1) : String(Math.round(v));
+  const m = marker != null ? Math.max(0, Math.min(100, marker)) : null;
+  const rad = m != null ? Math.PI * (1 - m / 100) : 0;
+  const h = Math.round(size * (showBounds ? 0.58 : 0.55));
   return (
-    <div className="relative mx-auto" style={{ width: size, height: size / 2 + 12 }} dir="ltr" role="img" aria-label={`${Math.round(v)}%`}>
-      <svg viewBox="0 0 200 110" width={size} height={size * 0.55}><path d="M 22 100 A 78 78 0 0 1 178 100" fill="none" stroke="#F1F5F9" strokeWidth="16" strokeLinecap="round" /><path d="M 22 100 A 78 78 0 0 1 178 100" fill="none" stroke={GOLD} strokeWidth="16" strokeLinecap="round" strokeDasharray={`${(v / 100) * c} ${c}`} /></svg>
-      <div className="absolute inset-x-0 bottom-0 text-center"><p className="num text-kpi leading-none">{Math.round(v)}%</p>{label && <p className="mt-1 text-caption text-muted">{label}</p>}</div>
+    <div className="relative mx-auto" style={{ width: size, height: h }} dir="ltr" role="img" aria-label={`${pctText}%`}>
+      <svg viewBox={showBounds ? '0 0 220 128' : '0 0 220 116'} width={size} height={h} className="overflow-visible">
+        <defs>
+          <linearGradient id="gauge-gold" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#E4B85B" />
+            <stop offset="100%" stopColor={GOLD} />
+          </linearGradient>
+        </defs>
+        <path d="M 42 102 A 68 68 0 0 1 178 102" fill="none" stroke="#E2E8F0" strokeWidth="1.25" strokeDasharray="2 5" />
+        <path d="M 28 102 A 82 82 0 0 1 192 102" fill="none" stroke={GRID} strokeWidth="14" strokeLinecap="round" />
+        {v > 0 && (
+          <path d="M 28 102 A 82 82 0 0 1 192 102" fill="none" stroke="url(#gauge-gold)" strokeWidth="14" strokeLinecap="round" strokeDasharray={`${Math.max(0.01, v / 100) * c} ${c}`} />
+        )}
+        {m != null && (
+          <line x1={cx + 71 * Math.cos(rad)} y1={cy - 71 * Math.sin(rad)} x2={cx + 93 * Math.cos(rad)} y2={cy - 93 * Math.sin(rad)} stroke={NAVY} strokeWidth="2" strokeLinecap="round" opacity="0.45" />
+        )}
+        {showBounds && (
+          <>
+            <text x="28" y="122" textAnchor="middle" fill={SLATE} fontSize="10" fontWeight="500">0%</text>
+            <text x="192" y="122" textAnchor="middle" fill={SLATE} fontSize="10" fontWeight="500">100%</text>
+          </>
+        )}
+      </svg>
+      <div className={showBounds ? 'absolute inset-x-0 bottom-4 text-center' : 'absolute inset-x-0 bottom-0.5 text-center'}>
+        <p className="num text-[30px] font-bold leading-none tracking-tight text-fg">{pctText}%</p>
+        {label && <p className="num mt-1.5 text-caption font-medium text-muted">{label}</p>}
+      </div>
     </div>
   );
 }

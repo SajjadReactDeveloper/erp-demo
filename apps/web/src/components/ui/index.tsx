@@ -1,7 +1,8 @@
 'use client';
-import { forwardRef, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { Children, forwardRef, isValidElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createPortal } from 'react-dom';
 import clsx from 'clsx';
-import { icons, Loader2, AlertTriangle, X, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, type LucideIcon } from 'lucide-react';
+import { icons, Loader2, AlertTriangle, X, Check, ChevronDown, ChevronLeft, ChevronRight, ArrowLeft, ArrowRight, type LucideIcon } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { useT } from '@/lib/i18n';
 
@@ -50,13 +51,254 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 Input.displayName = 'Input';
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(({ className, invalid, ...p }, ref) => <textarea ref={ref} rows={3} className={cn(ctl, 'py-2.5', invalid && 'border-danger bg-danger-bg/40', className)} {...p} />);
 Textarea.displayName = 'Textarea';
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(({ className, invalid, children, ...p }, ref) => <select ref={ref} className={cn(ctl, 'h-[42px] pe-8', invalid && 'border-danger', className)} {...p}>{children}</select>);
+type SelectOpt = { value: string; label: string; disabled?: boolean };
+function optText(n: ReactNode): string {
+  if (n == null || typeof n === 'boolean') return '';
+  if (typeof n === 'string' || typeof n === 'number') return String(n);
+  if (Array.isArray(n)) return n.map(optText).join('');
+  if (isValidElement<{ children?: ReactNode }>(n)) return optText(n.props.children);
+  return '';
+}
+function extractOpts(children: ReactNode): SelectOpt[] {
+  const out: SelectOpt[] = [];
+  const walk = (nodes: ReactNode) => {
+    Children.forEach(nodes, (child) => {
+      if (!isValidElement(child)) return;
+      const props = child.props as Record<string, any>;
+      if (child.type === 'option') {
+        const label = optText(props.children);
+        const value = props.value !== undefined ? String(props.value) : label;
+        out.push({ value, label, disabled: !!props.disabled });
+      } else if (props?.children) {
+        walk(props.children);
+      }
+    });
+  };
+  walk(children);
+  return out;
+}
+
+export const Select = forwardRef<HTMLButtonElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(
+  ({ className, invalid, children, value, defaultValue, onChange, disabled, name, id, 'aria-label': ariaLabel, 'aria-labelledby': ariaLabelledBy, title }, ref) => {
+    const { dir } = useT();
+    const listId = useId();
+    const opts = useMemo(() => extractOpts(children), [children]);
+    const controlled = value !== undefined;
+    const [inner, setInner] = useState<string>(() => (defaultValue !== undefined ? String(defaultValue) : opts[0]?.value ?? ''));
+    const current = controlled ? String(value ?? '') : inner;
+    const selected = opts.find((o) => o.value === current) ?? opts[0];
+
+    const [open, setOpen] = useState(false);
+    const [hi, setHi] = useState(-1);
+    const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; minWidth: number; maxHeight: number }>({ top: 0, left: 0, minWidth: 120, maxHeight: 256 });
+    const btnRef = useRef<HTMLButtonElement | null>(null);
+    const menuRef = useRef<HTMLDivElement | null>(null);
+    const typeBuf = useRef({ s: '', t: 0 });
+
+    const setRefs = useCallback(
+      (el: HTMLButtonElement | null) => {
+        btnRef.current = el;
+        if (typeof ref === 'function') ref(el);
+        else if (ref) (ref as React.MutableRefObject<HTMLButtonElement | null>).current = el;
+      },
+      [ref]
+    );
+
+    const place = useCallback(() => {
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const gap = 4;
+      const est = Math.min(264, opts.length * 36 + 10);
+      const below = window.innerHeight - r.bottom - 8;
+      const above = r.top - 8;
+      const up = below < est && above > below;
+      const minWidth = Math.min(Math.max(r.width, 96), window.innerWidth - 16);
+      const left = Math.min(Math.max(8, dir === 'rtl' ? r.right - minWidth : r.left), window.innerWidth - minWidth - 8);
+      setPos({
+        ...(up ? { bottom: window.innerHeight - r.top + gap } : { top: r.bottom + gap }),
+        left,
+        minWidth,
+        maxHeight: Math.max(120, Math.min(264, (up ? above : below) - gap)),
+      });
+    }, [opts.length, dir]);
+
+    useLayoutEffect(() => {
+      if (!open) return;
+      place();
+      const onResize = () => place();
+      const onScroll = (e: Event) => {
+        if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+        setOpen(false);
+      };
+      window.addEventListener('resize', onResize);
+      window.addEventListener('scroll', onScroll, true);
+      return () => {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('scroll', onScroll, true);
+      };
+    }, [open, place]);
+
+    useEffect(() => {
+      if (!open) return;
+      const onDown = (e: MouseEvent) => {
+        const t = e.target as Node;
+        if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+        setOpen(false);
+      };
+      document.addEventListener('mousedown', onDown);
+      return () => document.removeEventListener('mousedown', onDown);
+    }, [open]);
+
+    useEffect(() => {
+      if (!open || hi < 0) return;
+      menuRef.current?.querySelector<HTMLElement>(`[data-idx="${hi}"]`)?.scrollIntoView({ block: 'nearest' });
+    }, [open, hi]);
+
+    const choose = (opt: SelectOpt) => {
+      if (opt.disabled) return;
+      if (!controlled) setInner(opt.value);
+      onChange?.({ target: { value: opt.value, name: name ?? '' }, currentTarget: { value: opt.value, name: name ?? '' } } as any);
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+
+    const nextIdx = (from: number, step: 1 | -1) => {
+      for (let i = from + step; i >= 0 && i < opts.length; i += step) if (!opts[i].disabled) return i;
+      return from;
+    };
+
+    const openMenu = (fallback?: 'first' | 'last') => {
+      if (disabled || !opts.length) return;
+      const curIdx = opts.findIndex((o) => o.value === current && !o.disabled);
+      const start = curIdx >= 0 ? curIdx : fallback === 'last' ? nextIdx(opts.length, -1) : nextIdx(-1, 1);
+      setHi(start);
+      setOpen(true);
+    };
+
+    const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+      if (disabled) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!open) openMenu('first');
+        else setHi((i) => nextIdx(i < 0 ? -1 : i, 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!open) openMenu('last');
+        else setHi((i) => nextIdx(i < 0 ? opts.length : i, -1));
+      } else if (e.key === 'Home' && open) {
+        e.preventDefault();
+        setHi(nextIdx(-1, 1));
+      } else if (e.key === 'End' && open) {
+        e.preventDefault();
+        setHi(nextIdx(opts.length, -1));
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (!open) openMenu('first');
+        else if (hi >= 0 && opts[hi]) choose(opts[hi]);
+      } else if (e.key === 'Escape' && open) {
+        e.preventDefault();
+        setOpen(false);
+      } else if (e.key === 'Tab' && open) {
+        setOpen(false);
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const now = Date.now();
+        const s = now - typeBuf.current.t < 500 ? typeBuf.current.s + e.key.toLowerCase() : e.key.toLowerCase();
+        typeBuf.current = { s, t: now };
+        const hit = opts.findIndex((o) => !o.disabled && o.label.toLowerCase().startsWith(s));
+        if (hit >= 0) {
+          if (open) setHi(hit);
+          else choose(opts[hit]);
+        }
+      }
+    };
+
+    const hasW = /\b!?w-/.test(className ?? '');
+    const hasH = /\b!?h-/.test(className ?? '');
+    const display = selected?.label?.trim() ? selected.label : '—';
+
+    return (
+      <>
+        {name && <input type="hidden" name={name} value={current} />}
+        <button
+          ref={setRefs}
+          id={id}
+          type="button"
+          role="combobox"
+          dir={dir}
+          disabled={disabled}
+          title={title}
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledBy}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-invalid={invalid || undefined}
+          onClick={() => (open ? setOpen(false) : openMenu())}
+          onKeyDown={onKeyDown}
+          className={cn(
+            'inline-flex items-center justify-between gap-2 rounded-md border border-line bg-soft px-3 text-body text-fg transition hover:border-muted/40 disabled:cursor-not-allowed disabled:opacity-60',
+            !hasW && 'w-full',
+            !hasH && 'h-[42px]',
+            open && 'border-navy bg-card',
+            invalid && 'border-danger bg-danger-bg/40',
+            className
+          )}
+        >
+          <span className={cn('min-w-0 flex-1 truncate text-start', !selected?.label?.trim() && 'text-muted')}>{display}</span>
+          <ChevronDown size={15} className={cn('shrink-0 text-muted transition-transform duration-150', open && 'rotate-180 text-navy')} aria-hidden />
+        </button>
+        {open &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={menuRef}
+              id={listId}
+              role="listbox"
+              dir={dir}
+              style={{ position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, minWidth: pos.minWidth, maxWidth: 'calc(100vw - 16px)' }}
+              className="z-[90] overflow-hidden rounded-md border border-line bg-card p-1 shadow-pop"
+            >
+              <div className="overflow-y-auto" style={{ maxHeight: pos.maxHeight }}>
+                {opts.map((o, i) => {
+                  const isSel = o.value === current;
+                  const isHi = i === hi;
+                  return (
+                    <button
+                      key={`${o.value}-${i}`}
+                      type="button"
+                      role="option"
+                      data-idx={i}
+                      disabled={o.disabled}
+                      aria-selected={isSel}
+                      onMouseEnter={() => !o.disabled && setHi(i)}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => choose(o)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-3 rounded-sm px-2.5 py-2 text-start text-small transition-colors',
+                        isSel ? 'bg-navy/[0.07] font-semibold text-navy' : isHi ? 'bg-soft text-fg' : 'text-fg hover:bg-soft',
+                        o.disabled && 'cursor-not-allowed opacity-45'
+                      )}
+                    >
+                      <span className={cn('min-w-0 flex-1 truncate', !o.label.trim() && 'text-muted')}>{o.label.trim() || '—'}</span>
+                      {isSel && <Check size={14} className="shrink-0 text-gold-text" aria-hidden />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body
+          )}
+      </>
+    );
+  }
+);
 Select.displayName = 'Select';
 export const Checkbox = ({ label, ...p }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) => (
   <label className="inline-flex cursor-pointer select-none items-center gap-2 text-body"><input type="checkbox" className="h-4 w-4 rounded border-line accent-[hsl(var(--navy))]" {...p} />{label}</label>
 );
 
-export const Card = ({ className, children, ...p }: { className?: string; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) => <div className={cn('rounded-2xl border border-line bg-card', className)} {...p}>{children}</div>;
+export const Card = ({ className, children, ...p }: { className?: string; children: ReactNode } & React.HTMLAttributes<HTMLDivElement>) => <div className={cn('rounded-2xl border border-line bg-card shadow-card', className)} {...p}>{children}</div>;
 export const CardHeader = ({ title, actions, sub }: { title: ReactNode; actions?: ReactNode; sub?: ReactNode }) => (
   <div className="flex flex-wrap items-start justify-between gap-3 px-6 pb-1 pt-5"><div className="min-w-0"><h3 className="text-card-title text-fg">{title}</h3>{sub && <p className="mt-0.5 text-small text-muted">{sub}</p>}</div>{actions}</div>
 );
@@ -76,7 +318,7 @@ const TONE_MAP: [string, string[]][] = [
 ];
 export const toneOf = (v?: string) => TONE_MAP.find(([, l]) => l.includes(String(v)))?.[0] ?? 'muted';
 export function Badge({ children, tone = 'muted', className, dot }: { children: ReactNode; tone?: string; className?: string; dot?: boolean }) {
-  return <span className={cn('inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-caption font-semibold', TONES[tone] ?? TONES.muted, className)}>{dot && <span className={cn('h-1.5 w-1.5 rounded-full', tone === 'primary' ? 'bg-gold' : 'bg-current')} />}{children}</span>;
+  return <span className={cn('inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-xs px-2.5 text-caption font-semibold', TONES[tone] ?? TONES.muted, className)}>{dot && <span className={cn('h-1.5 w-1.5 rounded-full', tone === 'primary' ? 'bg-gold' : 'bg-current')} />}{children}</span>;
 }
 export function StatusBadge({ value }: { value?: string | null }) { const { el } = useT(); if (!value) return null; return <Badge tone={toneOf(value)} dot>{el(value)}</Badge>; }
 
@@ -125,7 +367,17 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, danger
 }
 
 export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { key: T; label: string; count?: number; icon?: string }[]; value: T; onChange: (k: T) => void }) {
-  return <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-line">{tabs.map((t) => <button key={t.key} role="tab" aria-selected={value === t.key} onClick={() => onChange(t.key)} className={cn('relative flex items-center gap-1.5 whitespace-nowrap px-4 py-3 text-small font-semibold transition', value === t.key ? 'text-navy' : 'text-muted hover:text-fg')}>{t.icon && <Icon name={t.icon} size={16} />}{t.label}{t.count != null && <span className="num rounded-full bg-soft px-1.5 text-[11px] text-strong">{t.count}</span>}{value === t.key && <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t-full bg-gold" />}</button>)}</div>;
+  return (
+    <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none]">
+      {tabs.map((t) => { const on = value === t.key; return (
+        <button key={t.key} role="tab" aria-selected={on} onClick={() => onChange(t.key)} className={cn('group relative flex h-12 shrink-0 items-center gap-2 whitespace-nowrap px-4 text-small font-semibold transition-colors', on ? 'text-navy' : 'text-muted hover:bg-soft hover:text-fg')}>
+          {t.icon && <Icon name={t.icon} size={17} className={cn('transition-colors', on ? 'text-gold' : 'text-muted/70 group-hover:text-fg')} />}
+          {t.label}
+          {t.count != null && <span className={cn('num grid h-5 min-w-5 place-items-center px-1.5 text-[11px] font-bold leading-none', on ? 'bg-navy text-white' : 'bg-soft text-strong')}>{t.count}</span>}
+          <span className={cn('absolute inset-x-0 -bottom-px h-[3px] bg-gold transition-opacity', on ? 'opacity-100' : 'opacity-0')} />
+        </button>); })}
+    </div>
+  );
 }
 
 /** Segmented control (system §5.7) */
@@ -151,9 +403,9 @@ export function Pagination({ page, pages, total, limit, onPage, onLimit }: { pag
 export function PageHeader({ title, sub, actions, back, badge }: { title: ReactNode; sub?: ReactNode; actions?: ReactNode; back?: () => void; badge?: ReactNode }) {
   const { dir, t } = useT(); const B = dir === 'rtl' ? ArrowRight : ArrowLeft;
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 items-start gap-3">
-        {back && <Button variant="secondary" size="sm" onClick={back} aria-label={t('Back')} className="mt-1 !px-2"><B size={16} /></Button>}
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        {back && <Button variant="secondary" onClick={back} aria-label={t('Back')} className="w-10 !px-0"><B size={16} /></Button>}
         <div className="min-w-0"><div className="flex flex-wrap items-center gap-2.5"><h1 className="truncate text-page-title">{title}</h1>{badge}</div>{sub && <p className="mt-0.5 text-small text-muted">{sub}</p>}</div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -175,4 +427,4 @@ export function Stat({ label, value, sub, icon, loading, tone, chip }: { label: 
 export const Kbd = ({ children }: { children: ReactNode }) => <kbd className="rounded-xs border border-line bg-card px-1.5 py-0.5 text-[10px] font-semibold text-muted">{children}</kbd>;
 export const Avatar = ({ name, size = 30, dark }: { name?: string; size?: number; dark?: boolean }) => <span style={{ width: size, height: size }} className={cn('grid shrink-0 place-items-center rounded-full text-caption font-bold', dark ? 'bg-gold-light text-gold-text' : 'bg-soft text-navy')}>{(name ?? '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>;
 /** Progress bar (system §5.8) */
-export const Progress = ({ value, tone = 'gold', className }: { value: number; tone?: 'gold' | 'navy'; className?: string }) => <div role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100} className={cn('h-1.5 overflow-hidden rounded-full bg-soft', className)}><div className={cn('h-full rounded-full', tone === 'gold' ? 'bg-gold' : 'bg-navy')} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
+export const Progress = ({ value, tone = 'gold', className }: { value: number; tone?: 'gold' | 'navy'; className?: string }) => <div role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100} className={cn('h-1.5 overflow-hidden rounded-xs bg-soft', className)}><div className={cn('h-full rounded-xs', tone === 'gold' ? 'bg-gold' : 'bg-navy')} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>;
