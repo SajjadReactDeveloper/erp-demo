@@ -134,10 +134,14 @@ export function registerAuth(app: FastifyInstance) {
     if (!stableId) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
     if (ms && (claims.xms_edov === false || (claims.idp && claims.idp !== claims.iss))) throw new HttpError(403, 'bad_identity', 'Guest or unverified accounts cannot sign in');
     const subject = `${req.params.provider}:${ms ? tenant : 'google'}:${stableId}`;
-    const tokenEmail = String(claims?.email ?? (ms ? claims?.preferred_username : '') ?? '').toLowerCase();
+    // Only a provider-verified email may be used to link an account (Google: email_verified; Microsoft: xms_edov optional claim).
+    // preferred_username is never used for linking; it is only accepted below as an extra way for an already-linked account to confirm its email.
+    const emailTrusted = ms ? claims?.xms_edov === true : claims?.email_verified === true;
+    const tokenEmail = emailTrusted && claims?.email ? String(claims.email).toLowerCase() : '';
+    const seenEmails = [claims?.email, ms ? claims?.preferred_username : undefined].filter(Boolean).map((x) => String(x).toLowerCase());
     let u = await prisma.user.findFirst({ where: { ssoSubject: subject, kind: 'staff', isActive: true } });
     // A linked account must still carry the same email as the provider's token: if an admin changed the ERP email (reassigned address, leaver), the old identity stops working until re-linked.
-    if (u && u.email.toLowerCase() !== tokenEmail) throw new HttpError(403, 'identity_mismatch', 'This sign-in no longer matches the account email. Ask an administrator.');
+    if (u && !seenEmails.includes(u.email.toLowerCase())) throw new HttpError(403, 'identity_mismatch', 'This sign-in no longer matches the account email. Ask an administrator.');
     if (!u && tokenEmail) {
       const cand = await prisma.user.findFirst({ where: { email: tokenEmail, kind: 'staff', isActive: true } });
       if (cand && !cand.ssoSubject) {
