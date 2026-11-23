@@ -9,3 +9,11 @@ onlyBuiltDependencies:
   - sharp
   - argon2
   - bcrypt
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true
+  sharp: true
+  argon2: true
+  bcrypt: true
