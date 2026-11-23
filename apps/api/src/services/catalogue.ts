@@ -32,16 +32,20 @@ export async function recordPrice(tx: Tx, companyId: string, p: { partId: string
 }
 
 /** Trigram + vehicle-fit search used by AI-1, marketplace search and POS lookup. */
+// Arabic spelling variants (alef/ta-marbuta/ya) and common trade synonyms, so "تيل فرامل امامي" finds "طقم فحمات أمامية".
+const AR_SYN: Record<string, string> = { تيل: 'فحمات', تيلات: 'فحمات', فحمه: 'فحمات', بريكات: 'فحمات', كفرات: 'اطار', كفر: 'اطار', تواير: 'اطار', بطاريه: 'بطاريه', مساحه: 'مساحات', شمعات: 'بوجي', بواجي: 'بوجي', امورتيزر: 'ممتص', ممتصات: 'ممتص' };
+export const arNorm = (s: string) => s.replace(/[ً-ْـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').split(/\s+/).map((w) => AR_SYN[w] ?? w).join(' ').replace(/فحمات فرامل|فرامل فحمات/, 'فحمات');
 export async function searchParts(tx: Tx, companyId: string, q: string, vehicle?: { make?: string | null; model?: string | null; year?: number | null }, limit = 10) {
   const n = normPN(q);
+  const qa = /[؀-ۿ]/.test(q) ? arNorm(q) : q;
   const rows: any[] = await tx.$queryRawUnsafe(
     `SELECT p.id, p."partNumber", p.name, p."nameAr",
-       GREATEST(similarity(p."partNumber", $2), similarity(p.name, $2), similarity(COALESCE(p."nameAr",''), $2),
+       GREATEST(similarity(p."partNumber", $2), similarity(p.name, $2), similarity(translate(COALESCE(p."nameAr",''), 'أإآةى', 'اااهي'), $7),
                 COALESCE((SELECT MAX(similarity(x."xrefNumber", $2)) FROM part_xref x WHERE x."partId" = p.id), 0),
                 CASE WHEN regexp_replace(upper(p."partNumber"),'[^A-Z0-9]','','g') = $3 THEN 1 ELSE 0 END) AS score,
        EXISTS (SELECT 1 FROM part_vehicle_fit f WHERE f."partId" = p.id AND ($4::text IS NULL OR lower(f.make) = lower($4)) AND ($5::text IS NULL OR lower(f.model) = lower($5)) AND ($6::int IS NULL OR ((f."yearFrom" IS NULL OR f."yearFrom" <= $6) AND (f."yearTo" IS NULL OR f."yearTo" >= $6)))) AS fits
      FROM part p WHERE p."companyId" = $1 AND p.status IN ('active','draft')
      ORDER BY score DESC, fits DESC LIMIT ${Math.min(limit, 50)}`,
-    companyId, q, n, vehicle?.make ?? null, vehicle?.model ?? null, vehicle?.year ?? null);
+    companyId, q, n, vehicle?.make ?? null, vehicle?.model ?? null, vehicle?.year ?? null, qa);
   return rows.filter((r) => r.score > 0.2).map((r) => ({ ...r, score: Number(r.score), fitBoost: !!r.fits && !!(vehicle?.make) }));
 }

@@ -59,7 +59,11 @@ export async function suggestParts(tx: Tx, ctx: Ctx, text: string, vehicle?: { m
     let conf = Math.min(0.99, c.score + (c.fitBoost ? 0.08 : 0) - (hasVeh && !c.fits ? 0.12 : 0));
     return { ...c, confidence: Math.max(0.05, Math.round(conf * 100) / 100) };
   }).sort((a, b) => b.confidence - a.confidence);
-  if (scored.length > 1 && scored[0].confidence - scored[1].confidence < 0.05) scored[0].confidence = Math.max(0.05, Math.round((scored[0].confidence - 0.15) * 100) / 100);
+  if (scored.length > 1 && scored[0].confidence - scored[1].confidence < 0.05) {
+    // near-tie: both candidates are uncertain, so lower both (a human confirms) and keep the list ordered by the shown confidence
+    for (const s of scored.slice(0, 2)) s.confidence = Math.max(0.05, Math.round((s.confidence - 0.15) * 100) / 100);
+    scored.sort((a, b) => b.confidence - a.confidence);
+  }
   let reason = scored[0] ? (scored[0].score >= 0.99 ? 'Exact part-number match' : scored[0].fits ? 'Similar description, fits the vehicle' : 'Similar description / number') : 'No candidate found';
   const useLlm = await llm.active(ctx.companyId);
   if (scored.length > 1 && useLlm) {
