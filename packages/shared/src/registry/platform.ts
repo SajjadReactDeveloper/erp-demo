@@ -10,8 +10,8 @@ export const platform = [
   R('Role', 'platform', 'Role', 'الدور', 'name', 'shield', ['name:s!*?', 'description:s*', 'permissions:j', 'isSystem:b#'], { f: ['PLT-01'], unique: [['companyId', 'name']] }),
   R('User', 'platform', 'User', 'المستخدم', 'name', 'user', [
     'email:s!*?', 'name:s!*?', 'phone:s', 'locale:e=ar|en', 'roleId:r=Role*', 'kind:e=staff|customer|supplier*', 'customerId:r=Customer', 'supplierId:r=Supplier', 'branchId:r=Branch',
-    'passwordHash:s#~', 'mfaEnabled:b#', 'mfaSecret:s#~', 'isActive:b*', 'lastLoginAt:T#', 'failedLogins:i#~', 'lockedUntil:T#~', 'delegateToId:r=User', 'delegateUntil:T', 'permissionsExtra:j',
-  ], { f: ['PLT-01', 'PLT-02', 'PLT-04', 'CPT-02'], unique: [['email']] }),
+    'passwordHash:s#~', 'mfaEnabled:b#', 'mfaSecret:s#~', 'isActive:b*', 'ssoSubject:s#~', 'lastLoginAt:T#', 'failedLogins:i#~', 'lockedUntil:T#~', 'delegateToId:r=User', 'delegateUntil:T', 'permissionsExtra:j',
+  ], { f: ['PLT-01', 'PLT-02', 'PLT-04', 'CPT-02'], unique: [['email'], ['ssoSubject']] }),
   R('Setting', 'platform', 'Setting', 'الإعداد', 'key', 'sliders', ['key:s!*?', 'value:j', 'description:s*', 'version:i#'], { f: ['PLT-10'], unique: [['companyId', 'key']], noDelete: true }),
   R('DocSequence', 'platform', 'Document sequence', 'تسلسل المستندات', 'docType', 'hash', ['docType:s!*', 'branchId:s', 'year:i!', 'nextNo:i!'], { sys: true, f: ['PLT-05'] }),
   R('Template', 'platform', 'Document template', 'قالب المستند', 'name', 'file-text', [

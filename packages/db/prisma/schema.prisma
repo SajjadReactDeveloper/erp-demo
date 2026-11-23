@@ -141,6 +141,7 @@ model User {
   mfaEnabled Boolean @default(false)
   mfaSecret String?
   isActive Boolean @default(true)
+  ssoSubject String?
   lastLoginAt DateTime?
   failedLogins Int @default(0)
   lockedUntil DateTime?
@@ -190,6 +191,7 @@ model User {
   @@index([branchId])
   @@index([delegateToId])
   @@unique([email])
+  @@unique([ssoSubject])
   @@map("user")
 }
 

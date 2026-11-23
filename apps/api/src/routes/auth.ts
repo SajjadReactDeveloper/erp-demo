@@ -128,7 +128,20 @@ export function registerAuth(app: FastifyInstance) {
     const issuerOk = ms ? claims?.tid === tenant && claims?.iss === `https://login.microsoftonline.com/${tenant}/v2.0` : ['https://accounts.google.com', 'accounts.google.com'].includes(String(claims?.iss ?? ''));
     const notExpired = typeof claims?.exp === 'number' && claims.exp * 1000 > Date.now();
     if (!claims || claims.aud !== process.env[`OIDC_${p.env}_CLIENT_ID`] || !issuerOk || !notExpired || (!ms && claims.email_verified !== true)) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
-    const u = claims?.email ? await prisma.user.findFirst({ where: { email: String(claims.email).toLowerCase(), kind: 'staff', isActive: true } }) : null;
+    // Identity = provider + tenant + the provider's immutable user id (oid for Microsoft, sub for Google), stored on the user.
+    // The mutable email claim is used only once, to link an account that has never been linked, so changing an email can never take over another account.
+    const stableId = ms ? claims.oid : claims.sub;
+    if (!stableId) throw new HttpError(403, 'bad_identity', 'Identity could not be verified');
+    if (ms && (claims.xms_edov === false || (claims.idp && claims.idp !== claims.iss))) throw new HttpError(403, 'bad_identity', 'Guest or unverified accounts cannot sign in');
+    const subject = `${req.params.provider}:${ms ? tenant : 'google'}:${stableId}`;
+    let u = await prisma.user.findFirst({ where: { ssoSubject: subject, kind: 'staff', isActive: true } });
+    if (!u && claims?.email) {
+      const cand = await prisma.user.findFirst({ where: { email: String(claims.email).toLowerCase(), kind: 'staff', isActive: true } });
+      if (cand && !cand.ssoSubject) {
+        u = await prisma.user.update({ where: { id: cand.id }, data: { ssoSubject: subject } });
+        await audit(prisma, { companyId: cand.companyId, userId: cand.id, ip: req.ip }, 'User', cand.id, 'login', undefined, { sso: req.params.provider, linked: true });
+      }
+    }
     if (!u) throw new HttpError(403, 'no_account', 'No ERP account is linked to this identity. Ask an administrator.');
     if (u.mfaEnabled) return { mfaRequired: true, mfaToken: signToken(u, '5m', 'mfa') };
     await audit(prisma, { companyId: u.companyId, userId: u.id, ip: req.ip }, 'User', u.id, 'login', undefined, { sso: req.params.provider });

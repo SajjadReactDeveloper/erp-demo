@@ -22,7 +22,7 @@ const DEMO = [
 /** Post-login redirect target: same-origin only. Control characters and backslashes are rejected (browsers strip tabs/newlines, so "/\t/host" would become "//host"), then the parsed origin must match. */
 function safeNext(nx: string | null): string | null {
   if (!nx || !nx.startsWith('/') || /[\x00-\x1f\\]/.test(nx)) return null;
-  try { const u = new URL(nx, window.location.origin); return u.origin === window.location.origin ? u.pathname + u.search + u.hash : null; } catch { return null; }
+  try { const u = new URL(nx, window.location.origin); const p = u.pathname + u.search + u.hash; return u.origin === window.location.origin && !p.startsWith('//') ? p : null; /* "/.//host" normalises to "//host" */ } catch { return null; }
 }
 
 function LoginForm() {
