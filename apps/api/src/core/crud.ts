@@ -105,12 +105,14 @@ function coerce(res: ResourceDef, input: any, mode: 'create' | 'update', ctx: Ct
 function labelSelect(t: ResourceDef) {
   const s: any = { id: true, [t.label]: true };
   if (t.key === 'Part') s.name = true;
+  if (t.label.endsWith('Id') && t.fields.find((x) => x.name === t.label)?.ref === 'Part') s[relName(t.label)] = { select: { partNumber: true, name: true } }; // e.g. RFQ line: show the part, not a UUID
   if (t.key === 'Vehicle') { s.make = true; s.model = true; }
   if (t.key === 'Customer' || t.key === 'Supplier') s.code = true;
   return s;
 }
 function labelValue(t: ResourceDef, o: any) {
   if (!o) return null;
+  if (t.label.endsWith('Id')) { const p = o[relName(t.label)]; if (p?.partNumber) return `⁦${p.partNumber}⁩ — ${p.name}`; }
   if (t.key === 'Part') return `⁦${o.partNumber}⁩ — ${o.name}`; // LRI..PDI keeps the part number in order inside Arabic (right-to-left) text
   if (t.key === 'Vehicle') return `${o.vin}${o.make ? ` · ${o.make} ${o.model ?? ''}` : ''}`;
   return String(o[t.label] ?? o.id);

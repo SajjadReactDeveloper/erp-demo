@@ -129,7 +129,7 @@ export async function daftraPush(db: Db, companyId: string, entity: string, enti
 
 // ---------------- LLM gateway (AI-1/2/3). Any OpenAI-compatible endpoint (OpenAI, Azure, Anthropic's /v1 compatibility API, a local server) ----------------
 // Used only when LLM_BASE_URL + LLM_API_KEY are set AND the company setting ai.provider is not 'local'. Otherwise callers use deterministic logic.
-export const llm = {
+export const llm: { lastError?: string; [k: string]: any } = {
   /** Environment is configured (does not look at the per-company setting). */
   enabled: () => !!process.env.LLM_BASE_URL && !!process.env.LLM_API_KEY,
   /** Configured and switched on for this company (ai.provider = 'llm'). */
@@ -139,9 +139,10 @@ export const llm = {
     const t0 = Date.now(); const model = opts.vision ? (process.env.LLM_VISION_MODEL ?? process.env.LLM_MODEL ?? 'gpt-4o-mini') : (process.env.LLM_MODEL ?? 'gpt-4o-mini');
     try {
       const r = await fetch(`${process.env.LLM_BASE_URL!.replace(/\/$/, '')}/chat/completions`, { method: 'POST', signal: AbortSignal.timeout(60000), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.LLM_API_KEY}` }, body: JSON.stringify({ model, temperature: 0, max_tokens: opts.maxTokens ?? 2000, ...(opts.json ? { response_format: { type: 'json_object' } } : {}), messages }) });
-      const j: any = await r.json(); if (!r.ok) return null;
+      const j: any = await r.json(); if (!r.ok) { llm.lastError = `${model}: HTTP ${r.status} ${String(j?.error?.message ?? "").slice(0, 160)}`; console.error("LLM request failed:", llm.lastError); return null; }
+      llm.lastError = undefined;
       return { text: String(j.choices?.[0]?.message?.content ?? ''), ms: Date.now() - t0 };
-    } catch { return null; }
+    } catch (e: any) { llm.lastError = `${model}: ${String(e?.message ?? e).slice(0, 160)}`; console.error("LLM request error:", llm.lastError); return null; }
   },
   async json(system: string, user: string, images?: { mime: string; b64: string }[]): Promise<any | null> {
     const content: any = images?.length ? [{ type: 'text', text: user }, ...images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.b64}` } }))] : user;

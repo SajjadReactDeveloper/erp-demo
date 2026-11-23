@@ -28,6 +28,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useT } from '@/lib/i18n';
+import { labelAr, labelEn } from '@erp/shared';
 import { fmtNum } from '@/lib/format';
 import { BarCard, LineCard, PieCard } from '@/components/charts';
 import { Avatar, Badge, Button, Star, cn, toast } from '@/components/ui';
@@ -695,7 +696,7 @@ function Answer({ r }: { r: any }) {
                 <tr className="border-b border-line text-caption font-semibold text-strong">
                   {cols.map((c, idx) => (
                     <th key={c} className={cn('px-3.5 py-2.5', idx > 0 ? 'text-end' : 'text-start')}>
-                      {c}
+                      {/^[a-z]+([A-Z_][A-Za-z]*)+$/.test(c) ? (lang === 'ar' ? labelAr(c) : labelEn(c)) : c}
                     </th>
                   ))}
                 </tr>
@@ -712,7 +713,7 @@ function Answer({ r }: { r: any }) {
                           typeof v === 'number' && 'num font-semibold text-fg'
                         )}
                       >
-                        {typeof v === 'number' ? fmtNum(v, lang) : String(v ?? '—')}
+                        {typeof v === 'number' ? (Number.isInteger(v) && !/sar|amount|total|spend|revenue|sales|price|cost|margin|%/i.test(cols[j] ?? '') ? new Intl.NumberFormat(lang === 'ar' ? 'ar-SA-u-nu-latn' : 'en').format(v) : fmtNum(v, lang)) : String(v ?? '—')}
                       </td>
                     ))}
                   </tr>

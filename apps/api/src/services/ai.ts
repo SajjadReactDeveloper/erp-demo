@@ -164,7 +164,7 @@ export async function extractQuote(file: { buffer: Buffer; filename: string; mim
       else {
         const r = await llm.json('You read a photographed or scanned supplier quotation. Return {"lines":[{"supplierPartNo":string,"description":string,"qty":number,"unitPrice":number,"leadTimeDays":number|null,"availability":"in_stock"|"on_order"|"unavailable"|null}]}. Use only what is printed; never invent rows or prices; skip totals and taxes. Numbers may be Arabic-Indic digits: convert them to Western digits.', 'Extract every priced line from this quotation.', [{ mime: file.mime || `image/${ext === 'jpg' ? 'jpeg' : ext}`, b64: file.buffer.toString('base64') }]);
         lines = ((r?.data?.lines ?? []) as any[]).filter((l) => l && Number(l.unitPrice) > 0).map((l) => ({ supplierPartNo: String(l.supplierPartNo ?? ''), description: String(l.description ?? ''), qty: Number(l.qty) > 0 ? Number(l.qty) : 1, unitPrice: Number(l.unitPrice), leadTimeDays: l.leadTimeDays ?? undefined, availability: l.availability ?? undefined, confidence: 0.7, issues: ['Read from an image by AI; please verify every price'] }));
-        if (!lines.length) issues.push('No priced lines could be read from this image. Try a sharper photo or enter the lines manually.');
+        if (!lines.length) issues.push(llm.lastError ? `The AI engine could not read this image (${llm.lastError}).` : 'No priced lines could be read from this image. Try a sharper photo or enter the lines manually.');
       }
     } else issues.push(`Unsupported file type .${ext}`);
   } catch (e: any) { issues.push(`Could not read the file: ${e.message}`); }
