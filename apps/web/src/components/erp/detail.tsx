@@ -12,7 +12,7 @@ import { fmtDateTime, fmtMoney, timeAgo } from '@/lib/format';
 import { Badge, Button, Card, CardHeader, ConfirmDialog, EmptyState, ErrorState, Field as FieldWrap, Icon, Input, Modal, PageHeader, Select, Skeleton, SkeletonRows, StatusBadge, Tabs, Textarea, cn, toast } from '@/components/ui';
 import { FieldInput, FieldValue, formFields } from './fields';
 import { ResourceList } from './list';
-import { EXTRA_TABS, EXTRA_HEADER, ACTION_OVERRIDES } from './extras';
+import { EXTRA_ACTIONS, EXTRA_TABS, EXTRA_HEADER, ACTION_OVERRIDES } from './extras';
 import { useBase } from './base';
 
 // ---- which statuses allow editing header + lines ----
@@ -332,10 +332,10 @@ export function Section({ title, icon, count, children }: { title: string; icon:
     </Card>
   );
 }
-const Cell = ({ label, children, wide, prominent }: { label: ReactNode; children: ReactNode; wide?: boolean; prominent?: boolean }) => (
-  <div className={cn('min-w-0 border-b border-e border-line px-5 py-4 transition-colors hover:bg-soft/30', wide && 'sm:col-span-2 xl:col-span-3')}>
-    <dt className="mb-1 text-[11.5px] font-medium text-muted">{label}</dt>
-    <dd className={cn('min-h-[22px] break-words text-fg', prominent ? 'num text-[16px] font-bold' : 'text-body font-medium')}>{children}</dd>
+const Cell = ({ label, children, prominent }: { label: ReactNode; children: ReactNode; prominent?: boolean }) => (
+  <div className="min-w-0">
+    <dt className="text-[11.5px] font-medium text-muted">{label}</dt>
+    <dd className={cn('mt-1 min-h-[22px] break-words text-fg', prominent ? 'num text-[17px] font-bold text-navy' : 'text-body font-medium')}>{children}</dd>
   </div>
 );
 
@@ -509,6 +509,7 @@ export function ResourceDetail({ res, id }: { res: ResourceDef; id: string }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ActionBar res={res} row={row} />
+            {EXTRA_ACTIONS[res.key]?.(row, res)}
             {editable && <Button variant="secondary" icon="pencil" onClick={() => setEditing(true)}>{t('Edit')}</Button>}
             {can(res, 'delete') && !res.noDelete && !res.immutable && <Button variant="ghost" className="text-danger hover:bg-danger-bg/60" icon="trash-2" onClick={() => setDel(true)} aria-label={t('Delete')} />}
           </div>
@@ -532,22 +533,52 @@ export function ResourceDetail({ res, id }: { res: ResourceDef; id: string }) {
       {tab === 'details' && (
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-5">
-            {groupFields(vis).map((g) => (
-              <Section key={g.key} title={g.title} icon={g.icon} count={g.items.length}>
-                <dl className="-mb-px -me-px grid sm:grid-cols-2 xl:grid-cols-3">
-                  {g.items.map((f) => (
-                    <Cell
-                      key={f.name}
-                      label={fl(res, f)}
-                      wide={f.type === 'text' && /note|desc|reason|comment|address/i.test(f.name)}
-                      prominent={g.key === 'amounts'}
-                    >
-                      <FieldValue field={f} row={row} res={res} />
-                    </Cell>
-                  ))}
-                </dl>
-              </Section>
-            ))}
+            {groupFields(vis).map((g) => {
+              const isWide = (f: Field) => f.type === 'text' && /note|desc|reason|comment|address/i.test(f.name);
+              const regular = g.items.filter((f) => !isWide(f));
+              const wideItems = g.items.filter(isWide);
+              const figCols = regular.length === 1 ? 'grid-cols-1' : regular.length === 2 ? 'sm:grid-cols-2' : regular.length === 4 ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-2 xl:grid-cols-3';
+              return (
+                <Section key={g.key} title={g.title} icon={g.icon} count={g.items.length}>
+                  {g.key === 'amounts' ? (
+                    <dl className={cn('grid divide-y divide-line sm:divide-x sm:divide-y-0 rtl:sm:divide-x-reverse', figCols)}>
+                      {regular.map((f) => (
+                        <div key={f.name} className={cn('min-w-0 px-5 py-4', /^total$/i.test(f.name) && 'bg-gold-light/30')}>
+                          <dt className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">{fl(res, f)}</dt>
+                          <dd className="num mt-1.5 text-[18px] font-bold leading-tight text-fg">
+                            <FieldValue field={f} row={row} res={res} />
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : (
+                    <>
+                      {regular.length > 0 && (
+                        <dl className="grid gap-x-6 gap-y-5 p-5 sm:grid-cols-2 xl:grid-cols-3">
+                          {regular.map((f) => (
+                            <Cell key={f.name} label={fl(res, f)}>
+                              <FieldValue field={f} row={row} res={res} />
+                            </Cell>
+                          ))}
+                        </dl>
+                      )}
+                      {wideItems.length > 0 && (
+                        <dl className="divide-y divide-line border-t border-line bg-soft/25">
+                          {wideItems.map((f) => (
+                            <div key={f.name} className="px-5 py-4">
+                              <dt className="text-[11.5px] font-medium text-muted">{fl(res, f)}</dt>
+                              <dd className="mt-1 whitespace-pre-wrap break-words text-body leading-relaxed text-fg">
+                                <FieldValue field={f} row={row} res={res} />
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </>
+                  )}
+                </Section>
+              );
+            })}
           </div>
           <RecordRail res={res} row={row} id={id} onHistory={can(res, 'read') ? () => setTab('history') : undefined} />
         </div>

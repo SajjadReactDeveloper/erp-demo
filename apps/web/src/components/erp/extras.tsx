@@ -104,30 +104,50 @@ export const ACTION_OVERRIDES: Record<string, ComponentType<OverrideProps>> = {
   'DeliveryNote.deliver': PodModal, 'Invoice.credit_note': CreditNoteModal, 'Quotation.approve': QuotationApproveModal, 'SupplierQuote.capture': CaptureModal, 'PurchaseOrder.confirm': PoConfirmModal,
 };
 
-// =============== header strips ===============
-function PrintBtn({ type, id, label }: { type: string; id: string; label?: string }) { const { t } = useT(); return <Button variant="secondary" size="sm" icon="printer" onClick={() => openDoc(`/api/v1/docs/${type}/${id}`)}>{label ?? t('Print / PDF')}</Button>; }
-function MoneyStrip({ items }: { items: { label: string; value: ReactNode; tone?: string }[] }) { return <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{items.map((i) => <Card key={i.label} className="p-4"><p className="text-xs font-semibold text-muted">{i.label}</p><p className={cn('num mt-1 text-lg font-extrabold', i.tone)}>{i.value}</p></Card>)}</div>; }
+// =============== header strips & actions ===============
+function PrintBtn({ type, id, label }: { type: string; id: string; label?: string }) { const { t } = useT(); return <Button variant="secondary" icon="printer" onClick={() => openDoc(`/api/v1/docs/${type}/${id}`)}>{label ?? t('Print / PDF')}</Button>; }
+function MoneyStrip({ items }: { items: { label: string; value: ReactNode; tone?: string; accent?: boolean }[] }) {
+  const cols = items.length === 2 ? 'sm:grid-cols-2' : items.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-4';
+  return (
+    <Card className="overflow-hidden">
+      <dl className={cn('grid divide-y divide-line sm:divide-x sm:divide-y-0 rtl:sm:divide-x-reverse', cols)}>
+        {items.map((i) => (
+          <div key={i.label} className={cn('relative px-5 py-4', i.accent && 'bg-gold-light/35 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gold')}>
+            <dt className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">{i.label}</dt>
+            <dd className={cn('num mt-1.5 text-[20px] font-bold leading-tight tracking-tight text-fg', i.tone)}>{i.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
+export const EXTRA_ACTIONS: Record<string, (row: any, res: ResourceDef) => ReactNode> = {
+  Quotation: (r) => <PrintBtn type="quotation" id={r.id} />,
+  Invoice: (r) => <PrintBtn type="invoice" id={r.id} />,
+  PurchaseOrder: (r) => <PrintBtn type="purchase_order" id={r.id} />,
+  DeliveryNote: (r) => <><PrintBtn type="delivery_note" id={r.id} /><Button variant="secondary" icon="tag" onClick={() => openDoc(`/api/v1/docs/label/${r.id}`, { kind: 'delivery_note' })}>Label</Button></>,
+  Receipt: (r) => <PrintBtn type="receipt" id={r.id} />,
+};
 
 export const EXTRA_HEADER: Record<string, (row: any, res: ResourceDef) => ReactNode> = {
   Quotation: (r) => <QuotationStrip r={r} />, Invoice: (r) => <InvoiceStrip r={r} />, Customer: (r) => <CustomerStrip r={r} />,
-  PurchaseOrder: (r) => <div className="mb-4 flex gap-2"><PrintBtn type="purchase_order" id={r.id} /></div>, DeliveryNote: (r) => <div className="mb-4 flex gap-2"><PrintBtn type="delivery_note" id={r.id} /><Button variant="secondary" size="sm" icon="tag" onClick={() => openDoc(`/api/v1/docs/label/${r.id}`, { kind: 'delivery_note' })}>Label</Button></div>,
-  Receipt: (r) => <div className="mb-4 flex gap-2"><PrintBtn type="receipt" id={r.id} /></div>,
   ApprovalRequest: (r) => <ApprovalStrip r={r} />,
   Request: (r) => <RequestStrip r={r} />,
 };
 function QuotationStrip({ r }: { r: any }) {
   const { t, lang } = useT();
   return (<>
-    {r.minMarginBreached && <div role="alert" className="mb-4 flex items-start gap-3 rounded-xl border border-warn/40 bg-warn/10 p-3.5 text-sm"><ShieldAlert className="mt-0.5 text-warn" size={18} /><div><b>{t('Below minimum margin')}</b><p className="text-muted">{t('Some lines are below the minimum margin. Request margin approval before sending.')}</p></div></div>}
-    <MoneyStrip items={[{ label: t('Subtotal'), value: fmtMoney(r.subtotal, lang) }, { label: 'VAT', value: fmtMoney(r.vatAmount, lang) }, { label: t('Total'), value: fmtMoney(r.total, lang), tone: 'text-primary' }, { label: t('Margin'), value: `${fmtNum(Number(r.marginPct) * 100, lang, 1)}%`, tone: r.minMarginBreached ? 'text-danger' : undefined }]} />
-    <div className="mb-4 flex gap-2"><PrintBtn type="quotation" id={r.id} /></div></>);
+    {r.minMarginBreached && <div role="alert" className="flex items-start gap-3 rounded-md border border-warn/40 bg-warn-bg/80 p-4 text-small"><ShieldAlert className="mt-0.5 shrink-0 text-warn" size={18} /><div><b className="text-warn">{t('Below minimum margin')}</b><p className="mt-0.5 text-strong">{t('Some lines are below the minimum margin. Request margin approval before sending.')}</p></div></div>}
+    <MoneyStrip items={[{ label: t('Subtotal'), value: fmtMoney(r.subtotal, lang) }, { label: 'VAT', value: fmtMoney(r.vatAmount, lang) }, { label: t('Total'), value: fmtMoney(r.total, lang), tone: 'text-navy', accent: true }, { label: t('Margin'), value: `${fmtNum(Number(r.marginPct) * 100, lang, 1)}%`, tone: r.minMarginBreached ? 'text-danger' : 'text-success' }]} />
+  </>);
 }
 function InvoiceStrip({ r }: { r: any }) {
   const { t, lang } = useT();
   return (<>
-    {r.status === 'rejected' && <div role="alert" className="mb-4 rounded-xl border border-danger/40 bg-danger/10 p-3.5 text-sm text-danger"><b>{t('ZATCA rejected this invoice.')}</b> {t('Open the ZATCA tab to see the errors, correct the data and resubmit.')}</div>}
-    <MoneyStrip items={[{ label: t('Total'), value: fmtMoney(r.total, lang), tone: 'text-primary' }, { label: t('Paid'), value: fmtMoney(r.paidAmount, lang) }, { label: t('Balance'), value: fmtMoney(r.balance, lang), tone: Number(r.balance) > 0 && r.dueDate && new Date(r.dueDate) < new Date() ? 'text-danger' : undefined }, { label: 'ZATCA', value: r.zatcaStatus ?? '—' }]} />
-    <div className="mb-4 flex gap-2"><PrintBtn type="invoice" id={r.id} /></div></>);
+    {r.status === 'rejected' && <div role="alert" className="rounded-md border border-danger/40 bg-danger-bg/80 p-4 text-small text-danger"><b>{t('ZATCA rejected this invoice.')}</b> {t('Open the ZATCA tab to see the errors, correct the data and resubmit.')}</div>}
+    <MoneyStrip items={[{ label: t('Total'), value: fmtMoney(r.total, lang), tone: 'text-navy', accent: true }, { label: t('Paid'), value: fmtMoney(r.paidAmount, lang), tone: 'text-success' }, { label: t('Balance'), value: fmtMoney(r.balance, lang), tone: Number(r.balance) > 0 && r.dueDate && new Date(r.dueDate) < new Date() ? 'text-danger' : undefined }, { label: 'ZATCA', value: r.zatcaStatus ? <StatusBadge value={r.zatcaStatus} /> : '—' }]} />
+  </>);
 }
 function CustomerStrip({ r }: { r: any }) {
   const { t, lang } = useT(); const q = useGet<{ data: any }>(['exposure', r.id], `/api/v1/credit/exposure/${r.id}`);

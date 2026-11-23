@@ -78,18 +78,18 @@ function JsonInput({ value, onChange, disabled, invalid }: { value: any; onChang
 const MONEY = /(total|amount|price|cost|balance|limit|spend|value|debit|credit|subtotal|exposure|overdue|cash|variance|expected|budget|ceiling|salary|fee)/i;
 export function FieldValue({ field, row, res, refs }: { field: Field; row: any; res: ResourceDef; refs?: any }) {
   const base = useBase();
-  const { lang, t } = useT(); const v = row[field.name];
+  const { lang, t, el } = useT(); const v = row[field.name];
   if (v == null || v === '') return <span className="text-muted/60">—</span>;
   switch (field.type) {
-    case 'ref': { const r = (row._refs ?? refs ?? {})[field.name]; return r ? <Link href={`${base}/${BY_KEY[field.ref!].slug}/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-primary hover:underline">{r.label}</Link> : <span className="text-muted/60">—</span>; }
-    case 'enum': return field.name === 'status' || /status|type|kind|severity|outcome|result/i.test(field.name) ? <StatusBadge value={v} /> : <Badge>{v}</Badge>;
-    case 'bool': return v ? <Check size={16} className="text-success" aria-label={t('Yes')} /> : <span className="text-muted/60">—</span>;
+    case 'ref': { const r = (row._refs ?? refs ?? {})[field.name]; return r ? <Link href={`${base}/${BY_KEY[field.ref!].slug}/${r.id}`} onClick={(e) => e.stopPropagation()} className="font-semibold text-navy hover:underline">{r.label}</Link> : <span className="text-muted/60">—</span>; }
+    case 'enum': return field.name === 'status' || /status|type|kind|severity|outcome|result/i.test(field.name) ? <StatusBadge value={v} /> : <Badge>{el(String(v))}</Badge>;
+    case 'bool': return v ? <span className="inline-flex items-center gap-1 text-small font-semibold text-success"><Check size={15} />{t('Yes')}</span> : <span className="text-small text-muted">{t('No')}</span>;
     case 'date': return <span className="num">{fmtDate(v, lang)}</span>;
     case 'datetime': return <span className="num">{fmtDateTime(v, lang)}</span>;
     case 'decimal': { const n = Number(v); if (/margin/i.test(field.name) && /pct/i.test(field.name)) return <span className="num">{fmtNum(n * 100, lang, 1)}%</span>; if (/pct$/i.test(field.name)) return <span className="num">{fmtNum(n, lang, 1)}%</span>; return <span className="num">{MONEY.test(field.name) ? fmtMoney(n, lang) : fmtNum(n, lang, 2)}</span>; }
     case 'int': return <span className="num">{fmtInt(v, lang)}</span>;
     case 'json': return isListJson(v) ? <span className="flex flex-wrap gap-1">{v.map((x: string) => <Badge key={x}>{x}</Badge>)}</span> : <code className="rounded bg-line/60 px-1.5 py-0.5 text-[11px]">{JSON.stringify(v).slice(0, 60)}</code>;
-    default: return <span className={cn(/^(number|code|vin|partNumber|entryNo|xrefNumber|supplierPartNo|serialNo|batchNo|barcode|trackingNo|iban)$/.test(field.name) && 'mono', /email|phone/i.test(field.name) && 'num')} dir={/email|url|vin|iban/i.test(field.name) ? 'ltr' : undefined}>{String(v).length > 120 ? String(v).slice(0, 120) + '…' : String(v)}</span>;
+    default: return <span className={cn(/^(number|code|vin|partNumber|entryNo|xrefNumber|supplierPartNo|serialNo|batchNo|barcode|trackingNo|iban)$/.test(field.name) && 'font-mono text-[13px] font-semibold text-navy', /email|phone/i.test(field.name) && 'num')} dir={/email|url|vin|iban/i.test(field.name) ? 'ltr' : undefined}>{String(v).length > 120 ? String(v).slice(0, 120) + '…' : String(v)}</span>;
   }
 }
 

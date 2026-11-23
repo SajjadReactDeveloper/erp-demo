@@ -19,6 +19,12 @@ const DEMO = [
   ['supplier@riyadhparts.test', 'Supplier portal'],
 ];
 
+/** Post-login redirect target: same-origin only. Control characters and backslashes are rejected (browsers strip tabs/newlines, so "/\t/host" would become "//host"), then the parsed origin must match. */
+function safeNext(nx: string | null): string | null {
+  if (!nx || !nx.startsWith('/') || /[\x00-\x1f\\]/.test(nx)) return null;
+  try { const u = new URL(nx, window.location.origin); return u.origin === window.location.origin ? u.pathname + u.search + u.hash : null; } catch { return null; }
+}
+
 function LoginForm() {
   const { t, lang, setLang } = useT();
   const { login, me, ready } = useAuth();
@@ -35,7 +41,7 @@ function LoginForm() {
   const home = (kind: string) => (kind === 'customer' ? '/portal' : kind === 'supplier' ? '/supplier' : '/app');
 
   useEffect(() => {
-    if (ready && me) { const nx = sp.get('next'); /* same-origin paths only: reject '//host' and '/\host' */ router.replace(nx && nx.startsWith('/') && !nx.startsWith('//') && !nx.startsWith('/\\') ? nx : home(me.kind)); }
+    if (ready && me) router.replace(safeNext(sp.get('next')) ?? home(me.kind));
     // eslint-disable-next-line
   }, [ready, me]);
 
