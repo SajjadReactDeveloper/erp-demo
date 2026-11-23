@@ -825,6 +825,33 @@ const AR: Record<string, string> = {
 
 export const STR_AR = AR;
 
+// Strings the UI passes through t() that are not literal t('...') calls, so they are added by hand.
+Object.assign(AR, {
+  'AI matching': 'مطابقة ذكية', Sourcing: 'التوريد', Comparison: 'المقارنة', 'Send via': 'إرسال عبر', portal: 'البوابة', whatsapp: 'واتساب', email: 'البريد الإلكتروني',
+  'Credit limit exceeded': 'تم تجاوز حد الائتمان', 'Reason for rejecting': 'سبب الرفض', 'Reason for releasing': 'سبب الإفراج',
+});
+
+// Messages composed by the API (toasts, notices). Translated centrally in api() so every screen gets them.
+const METHOD: Record<string, string> = { portal: 'البوابة', whatsapp: 'واتساب', email: 'البريد الإلكتروني' };
+const PAT: [RegExp, (m: RegExpMatchArray) => string][] = [
+  [/^RFQ (\S+) created with (\d+) suggested supplier\(s\)\. Review and send it\.$/, (m) => `تم إنشاء طلب الأسعار ${m[1]} مع ${m[2]} موردين مقترحين. راجعه ثم أرسله.`],
+  [/^AI suggested (\d+) of (\d+) lines\. Review and confirm each one\.$/, (m) => `اقترح الذكاء الاصطناعي ${m[1]} من ${m[2]} بنود. راجع كل بند وأكّده.`],
+  [/^Award confirmed\. Build the customer quotation next\.$/, () => 'تم تأكيد الترسية. ابنِ عرض السعر للعميل الآن.'],
+  [/^Sent via (\w+)$/, (m) => `تم الإرسال عبر ${METHOD[m[1]] ?? m[1]}`],
+  [/^For request (\S+)$/, (m) => `للطلب ${m[1]}`],
+  [/^Customer has (\d+) overdue invoice\(s\) totalling SAR ([\d.,]+)$/, (m) => `لدى العميل ${m[1]} فاتورة متأخرة بإجمالي ${m[2]} ر.س`],
+  [/^Your approval is recorded but needs a credit review \((.*)\)\. We will confirm shortly\.$/, (m) => `تم تسجيل اعتمادك لكنه يحتاج إلى مراجعة ائتمانية (${trServer(m[1])}). سنؤكد لك قريباً.`],
+  [/^Order is on credit hold: (.*)$/, (m) => `الطلب معلّق ائتمانياً: ${trServer(m[1])}`],
+  [/^Order confirmed\. Credit check passed\.$/, () => 'تم تأكيد الطلب. اجتاز فحص الائتمان.'],
+];
+/** Translates an API-composed message when the UI is Arabic; returns it unchanged otherwise (or when unknown). */
+export function trServer(s: string): string {
+  if (typeof document === 'undefined' || document.documentElement.lang !== 'ar' || typeof s !== 'string') return s;
+  if (AR[s]) return AR[s];
+  for (const [re, f] of PAT) { const m = s.match(re); if (m) return f(m); }
+  return s;
+}
+
 interface Ctx { lang: Lang; dir: 'rtl' | 'ltr'; t: (k: string, vars?: Record<string, string | number>) => string; setLang: (l: Lang) => void; fl: (r: ResourceDef, f: Field | string) => string; rl: (r: ResourceDef | string, plural?: boolean) => string; el: (v: string) => string }
 const C = createContext<Ctx | null>(null);
 

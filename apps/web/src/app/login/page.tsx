@@ -38,10 +38,10 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [sso, setSso] = useState<string[]>([]);
-  const home = (kind: string) => (kind === 'customer' ? '/portal' : kind === 'supplier' ? '/supplier' : '/app');
+  const home = (kind: string, role?: string) => (kind === 'customer' ? '/portal' : kind === 'supplier' ? '/supplier' : role === 'driver' || role === 'warehouse' ? '/m' : '/app');
 
   useEffect(() => {
-    if (ready && me) router.replace(safeNext(sp.get('next')) ?? home(me.kind));
+    if (ready && me) router.replace(safeNext(sp.get('next')) ?? home(me.kind, me.role));
     // eslint-disable-next-line
   }, [ready, me]);
 

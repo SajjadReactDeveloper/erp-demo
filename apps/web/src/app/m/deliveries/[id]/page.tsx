@@ -35,7 +35,7 @@ export default function DeliveryStop({ params }: { params: Promise<{ id: string 
     mark('delivered'); setPod(false); toast.success(t('Delivery confirmed. It will sync automatically.')); router.replace('/m/deliveries');
   };
   const submitFail = async () => { await enqueue('fail', { deliveryNoteId: id, reason }, await getDeviceId()); mark('failed'); setFail(false); toast.success(t('Saved')); router.replace('/m/deliveries'); };
-  const start = async () => { const pos = await new Promise<GeolocationPosition | null>((res) => (navigator.geolocation ? navigator.geolocation.getCurrentPosition(res, () => res(null), { timeout: 3000 }) : res(null))); await enqueue('dispatch', { deliveryNoteId: id, lat: pos?.coords.latitude, lng: pos?.coords.longitude }, await getDeviceId()); mark('out_for_delivery'); toast.success(t('Delivery started')); };
+  const start = async () => { mark('out_for_delivery'); toast.success(t('Delivery started')); /* instant feedback; the GPS fix (up to 3 s) is attached to the queued event */ const pos = await new Promise<GeolocationPosition | null>((res) => (navigator.geolocation ? navigator.geolocation.getCurrentPosition(res, () => res(null), { timeout: 3000 }) : res(null))); await enqueue('dispatch', { deliveryNoteId: id, lat: pos?.coords.latitude, lng: pos?.coords.longitude }, await getDeviceId()); };
   const maps = d.address?.lat ? `https://www.google.com/maps/dir/?api=1&destination=${d.address.lat},${d.address.lng}` : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.address?.line1 ?? ''} ${d.address?.city ?? ''}`)}`;
   const done = status === 'delivered' || status === 'failed';
   return (

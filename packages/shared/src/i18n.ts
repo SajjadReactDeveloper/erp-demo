@@ -55,6 +55,51 @@ const AR: Record<string, string> = {
   validated: 'تم التحقق', dryrun: 'تجريبي', stale: 'قديم', feed: 'الخلاصة', file_: 'ملف', api: 'واجهة برمجية', url: 'الرابط', session: 'الجلسة',
 };
 
+// Words that were missing (they used to fall back to English inside Arabic labels).
+Object.assign(AR, {
+  pct: '%', approve: 'اعتماد', reject: 'رفض', submit: 'إرسال', cancel: 'إلغاء', review: 'مراجعة', sold: 'مباع', assigned: 'مُسند', confirm: 'تأكيد', post: 'ترحيل', doc: 'مستند',
+  action: 'إجراء', create: 'إنشاء', send: 'إرسال', partner: 'شريك', sale: 'بيع', next: 'التالي', override: 'تجاوز', after: 'بعد', template: 'القالب', reviewed: 'تمت المراجعة', of: '',
+  close: 'إغلاق', capture: 'التقاط', accept: 'قبول', transit: 'قيد النقل', reverse: 'عكس', center: 'مركز', issue: 'إصدار', production: 'إنتاج', compliance: 'الامتثال', release: 'إفراج',
+  broken: 'منكوث', subject: 'الموضوع', statement: 'كشف الحساب', retry: 'إعادة المحاولة', activate: 'تفعيل', blocked: 'محظور', brands: 'العلامات', categories: 'الفئات', effective: 'ساري',
+  call: 'اتصال', visit: 'زيارة', complete: 'إكمال', under: 'تحت', adjust: 'تعديل', assign: 'إسناد', text: 'النص', full: 'كلي', alternative: 'بديل', check: 'فحص', returned: 'مرتجع',
+  credited: 'مُقيّد دائناً', awarded: 'تمت الترسية', captured: 'تم الالتقاط', billed: 'مفوتر', gr: 'استلام البضاعة', fail: 'فشل', print: 'طباعة', data: 'البيانات', booked: 'محجوز',
+  equity: 'حقوق الملكية', memo: 'مذكرة', auto: 'تلقائي', petty: 'نثرية', generate: 'توليد', kept: 'محتفظ به', offset: 'مقاصة', ack: 'إقرار', claimed: 'مُطالَب به', started: 'بدأ',
+  dismissed: 'مُستبعد', terminal: 'الطرفية', refunded: 'مسترد', replaced: 'مُستبدل', show: 'عرض', dates: 'التواريخ', color: 'اللون', system: 'النظام', sso: 'الدخول الموحد',
+  logins: 'عمليات الدخول', extra: 'إضافي', writeoff: 'شطب', actor: 'المنفّذ', delegated: 'مفوَّض', document: 'المستند', uploaded: 'مرفوع', clean: 'سليم', infected: 'مصاب',
+  update: 'تحديث', delete: 'حذف', logout: 'تسجيل الخروج', deny: 'رفض', before: 'قبل', ip: 'عنوان IP', endpoint: 'نقطة الاتصال', dead: 'متعذر', replay: 'إعادة', report: 'التقرير',
+  factor: 'العامل', market: 'السوق', embedding: 'التضمين', merge: 'دمج', any: 'أي', block: 'حظر', selling: 'البيع', zero: 'صفري', exempt: 'معفى', task: 'مهمة', scope: 'النطاق',
+  earn: 'اكتساب', redeem: 'استبدال', expire: 'انتهاء', uses: 'الاستخدامات', used: 'مستخدم', required: 'مطلوب', internal: 'داخلي', breached: 'متجاوز', build: 'بناء', recalc: 'إعادة حساب',
+  below: 'أقل من', plan: 'خطة', backorder: 'طلب مؤجل', not: 'غير', needed: 'مطلوب', restock: 'إعادة تخزين', write: 'شطب', off: '', via: 'عبر', auth: 'المصادقة', condition: 'الحالة',
+  collecting: 'قيد الجمع', select: 'اختيار', suppliers: 'الموردون', remind: 'تذكير', invited: 'مدعو', reminders: 'التذكيرات', access: 'الوصول', token: 'الرمز', needs: 'يحتاج',
+  recommend: 'توصية', revision: 'مراجعة', revise: 'تنقيح', defect: 'عيب', paused: 'متوقف مؤقتاً', items: 'العناصر', processed: 'تمت المعالجة', catalogue: 'الكتالوج', candidate: 'المرشح',
+  dispatch: 'إرسال', reschedule: 'إعادة جدولة', departed: 'غادر', arrived: 'وصل', rescheduled: 'أُعيدت جدولته', keys: 'المفاتيح', revoke: 'سحب', over: 'تجاوز', scanned: 'تم المسح',
+  picked: 'تم الاستلام', up: '', exception: 'استثناء', book: 'حجز', ship: 'شحن', asset: 'أصل', liability: 'التزام', revenue: 'إيراد', none: 'لا يوجد', inventory: 'المخزون',
+  grni: 'مستلم غير مفوتر', reopen: 'إعادة فتح', reversal: 'قيد عكسي', resubmit: 'إعادة إرسال', allocate: 'تخصيص', imported: 'مستورد', reconciling: 'قيد التسوية', reconciled: 'تمت التسوية',
+  finish: 'إنهاء', ignored: 'متجاهل', deposited: 'مودع', bounced: 'مرتجع', dated: 'مؤرخ', deposit: 'إيداع', clear: 'تسوية', bounce: 'ارتداد', payable: 'مستحق الدفع', sandbox: 'بيئة تجريبية',
+  simulation: 'محاكاة', private: 'خاص', go: '', clearance: 'تخليص', reporting: 'إبلاغ', attempt: 'محاولة', push: 'دفع', skipped: 'تم التخطي', suspended: 'موقوف', recompute: 'إعادة احتساب',
+  profile: 'الملف', reached: 'تم التواصل', answer: 'رد', dispute: 'نزاع', queued: 'في الانتظار', late: 'متأخر', trend: 'الاتجاه', rising: 'صاعد', usage: 'الاستخدام', resolved: 'تم الحل',
+  resolve: 'حل', scrapped: 'تالف', adjustment: 'تسوية', moved: 'منقول', cycle: 'دورة', counting: 'جرد', dismiss: 'استبعاد', cashier: 'أمين الصندوق', opened: 'مفتوح', voided: 'ملغى',
+  pay: 'دفع', void: 'إلغاء', refund: 'استرداد', set: 'مجموعة', ah: 'أمبير', register: 'تسجيل', inspected: 'تم الفحص', duration: 'المدة', awaiting: 'بانتظار', ended: 'منتهي',
+  upcoming: 'قادم', feature: 'الميزة', assistant: 'المساعد', input: 'المدخلات', output: 'المخرجات', latency: 'زمن الاستجابة', ms: 'مللي ثانية', prompt: 'الطلب', normal: 'عادي',
+  urgent: 'عاجل', high: 'مرتفع', low: 'منخفض', medium: 'متوسط', sent: 'أُرسل', viewed: 'شوهد', held: 'معلّق', open: 'مفتوح', closed: 'مغلق', failed: 'فشل', ok: 'ناجح', done: 'منجز',
+});
+
+// Compound labels where Arabic word order differs from English (word-by-word would read wrong).
+const PHRASES: Record<string, string> = {
+  accepted_warnings: 'مقبول مع تحذيرات', ai_capture: 'التقاط بالذكاء الاصطناعي', approved_full: 'معتمد كلياً', approved_internal: 'معتمد داخلياً', approved_partial: 'معتمد جزئياً',
+  awaiting_approval: 'بانتظار الاعتماد', broken_promise: 'وعد منكوث', captured_review: 'قيد مراجعة الالتقاط', checked_in: 'تم تسجيل الوصول', count_adjust: 'تسوية الجرد',
+  credit_check: 'فحص الائتمان', credit_note: 'إشعار دائن', debit_note: 'إشعار مدين', delivery_note: 'إشعار التسليم', in_progress: 'قيد التنفيذ', in_sourcing: 'قيد التوريد',
+  in_stock: 'متوفر', in_transit: 'قيد النقل', late_trend: 'اتجاه التأخر', limit_usage: 'استخدام الحد', no_answer: 'لا يوجد رد', no_profile: 'بلا ملف', no_response: 'لا استجابة',
+  no_show: 'لم يحضر', not_needed: 'غير مطلوب', on_hold: 'معلّق', on_order: 'قيد الطلب', out_for_delivery: 'خرج للتسليم', part_match: 'مطابقة القطع', partially_approved: 'معتمد جزئياً',
+  partially_delivered: 'مُسلَّم جزئياً', partially_paid: 'مدفوع جزئياً', partially_received: 'مستلم جزئياً', pending_approval: 'بانتظار الاعتماد', pending_margin_approval: 'بانتظار اعتماد الهامش',
+  pending_zatca: 'بانتظار زاتكا', petty_cash: 'عهدة نثرية', picked_up: 'تم الاستلام', price_override: 'تجاوز السعر', purchase_order: 'أمر شراء', quote_capture: 'التقاط عرض السعر',
+  rising_overdue: 'تأخر متصاعد', rolled_back: 'تم التراجع', supplier_return: 'مرتجع للمورد', supplier_returned: 'أُعيد للمورد', transfer_in: 'تحويل وارد', transfer_out: 'تحويل صادر',
+  under_review: 'قيد المراجعة', variance_pending: 'فرق معلّق', vat_in: 'ضريبة المدخلات', vat_out: 'ضريبة المخرجات', write_off: 'شطب', wrong_item: 'صنف خاطئ', wrong_part: 'قطعة خاطئة',
+  // field labels seen in the UI
+  min_margin_breached: 'تجاوز الحد الأدنى للهامش', tax_amount: 'مبلغ الضريبة', margin_pct: 'الهامش %', valid_until: 'صالح حتى', sent_at: 'أُرسل في', viewed_at: 'شوهد في',
+  approved_at: 'معتمد في', required_date: 'تاريخ الطلب', assigned_to: 'مُسند إلى', sla_due: 'مهلة الاستجابة', send_via: 'إرسال عبر',
+};
+
 const words = (s: string) =>
   s
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -78,11 +123,13 @@ export function labelEn(name: string): string {
 
 export function labelAr(name: string): string {
   const w = words(name.replace(/Id$/, ''));
+  if (PHRASES[w.join('_')]) return PHRASES[w.join('_')];
   const out = w.map((x) => (x in AR ? AR[x] : labelEn(x))).filter(Boolean);
   return out.join(' ') || labelEn(name);
 }
 
 export function enumLabel(v: string, lang: 'en' | 'ar'): string {
   const w = v.split('_');
+  if (lang === 'ar' && PHRASES[v]) return PHRASES[v];
   return lang === 'ar' ? w.map((x) => (x in AR ? AR[x] : x)).join(' ') : w.map((x) => UP[x] ?? cap(x)).join(' ');
 }

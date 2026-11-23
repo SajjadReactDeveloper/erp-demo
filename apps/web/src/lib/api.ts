@@ -1,3 +1,4 @@
+import { trServer } from "./i18n";
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4010';
 const KEY = 'erp_token';
 
@@ -38,8 +39,9 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
       setToken(null);
       if (!location.pathname.startsWith('/login')) location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}&reason=${err.code ?? 'expired'}`;
     }
-    throw new ApiError(res.status, err.code ?? 'error', err.message ?? (res.status === 429 ? 'Too many requests. Please slow down.' : 'Request failed'), err.details, err.requestId);
+    throw new ApiError(res.status, err.code ?? 'error', trServer(err.message ?? (res.status === 429 ? 'Too many requests. Please slow down.' : 'Request failed')), err.details, err.requestId);
   }
+  if (data && typeof (data as any).message === 'string') (data as any).message = trServer((data as any).message);
   return data as T;
 }
 

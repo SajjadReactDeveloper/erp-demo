@@ -26,7 +26,7 @@ export default function NewRequest() {
   const submit = useMutation({
     mutationFn: async () => {
       let vId = vehicleId;
-      if (!vId && vin) { if (dv && !dv.valid) throw new Error(dv.error); const v = await api<any>('/api/v1/r/vehicle', { method: 'POST', body: { vin: dvin, make: dv?.make, year: dv?.year } }); vId = v.data.id; }
+      if (!vId && vin) { if (dv && !dv.valid) throw new Error(dv.error); try { const v = await api<any>('/api/v1/r/vehicle', { method: 'POST', body: { vin: dvin, make: dv?.make, year: dv?.year } }); vId = v.data.id; } catch (e: any) { if (e?.code !== 'duplicate') throw e; /* VIN already registered: the request carries the VIN itself */ } }
       const req = await api<any>('/api/v1/r/request', { method: 'POST', body: { vehicleId: vId, vin: dvin || undefined, urgency, requiredDate: date, notes, children: { RequestLine: valid.map((l, i) => ({ lineNo: i + 1, customerText: l.text, partNumberText: l.partNo || undefined, qty: l.qty })) } } });
       const created = await api<any>(`/api/v1/r/request/${req.data.id}`);
       for (const [i, l] of lines.filter((x) => x.text.trim() && Number(x.qty) > 0).entries()) if (l.file) { const fd = new FormData(); fd.append('refType', 'RequestLine'); fd.append('refId', created.data._children.RequestLine[i].id); fd.append('kind', 'photo'); fd.append('file', l.file); await api('/api/v1/files', { method: 'POST', form: fd }).catch(() => toast.warning(t('A photo could not be uploaded'))); }

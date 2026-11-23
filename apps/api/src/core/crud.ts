@@ -111,7 +111,7 @@ function labelSelect(t: ResourceDef) {
 }
 function labelValue(t: ResourceDef, o: any) {
   if (!o) return null;
-  if (t.key === 'Part') return `${o.partNumber} — ${o.name}`;
+  if (t.key === 'Part') return `⁦${o.partNumber}⁩ — ${o.name}`; // LRI..PDI keeps the part number in order inside Arabic (right-to-left) text
   if (t.key === 'Vehicle') return `${o.vin}${o.make ? ` · ${o.make} ${o.model ?? ''}` : ''}`;
   return String(o[t.label] ?? o.id);
 }

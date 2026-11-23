@@ -104,6 +104,13 @@ export function registerOpsRoutes(app: FastifyInstance) {
     const events: any[] = Array.isArray(req.body?.events) ? req.body.events.slice(0, 200) : [];
     if (!events.length) throw bad('No events');
     events.sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')));
+    // The phone/PWA invents its own device id; register it on first sync so scan/POD rows can reference it (FK), and never accept one that belongs to another company.
+    for (const did of new Set(events.map((e) => e.deviceId).filter((d) => typeof d === 'string' && /^[0-9a-f-]{36}$/i.test(d)))) {
+      const known = await prisma.device.findUnique({ where: { id: did }, select: { companyId: true } });
+      if (!known) await prisma.device.create({ data: { id: did, companyId: ctx.companyId, name: 'Mobile app', kind: 'pwa', userId: ctx.userId, createdById: ctx.userId, lastSeenAt: new Date() } });
+      else if (known.companyId !== ctx.companyId) for (const e of events) if (e.deviceId === did) e.deviceId = undefined;
+    }
+    for (const e of events) if (e.deviceId && !/^[0-9a-f-]{36}$/i.test(String(e.deviceId))) e.deviceId = undefined;
     const results: any[] = [];
     for (const e of events) {
       const id = String(e.clientEventId ?? ''); if (!id) { results.push({ clientEventId: id, status: 'error', message: 'clientEventId is required' }); continue; }
