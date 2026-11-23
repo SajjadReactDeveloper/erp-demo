@@ -4,6 +4,7 @@ import { prisma, Tx } from '@erp/db';
 import { getSetting } from '../core/base';
 import { createHmac, randomUUID } from 'node:crypto';
 import nodemailer from 'nodemailer';
+import { emailHtml, emailSubject, emailText, type MailCompany } from './email-template';
 
 type Db = Tx | typeof prisma;
 
@@ -49,7 +50,9 @@ export async function sendMessage(db: Db, companyId: string, m: { channel: 'what
   if (m.channel === 'email' && smtpConfigured()) {
     const ep = process.env.SMTP_HOST ?? 'smtp-url';
     try {
-      const info = await smtp().sendMail({ from: process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'no-reply@localhost', to: m.to, subject: m.subject ?? body.slice(0, 80), text: body, html: `<div dir="${lang === 'ar' ? 'rtl' : 'ltr'}" style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6">${body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>')}</div>`, attachments: m.attachments });
+      const co: MailCompany = (await (db as any).company.findFirst({ where: { id: companyId }, select: { name: true, nameAr: true, address: true, phone: true, email: true, vatNumber: true, crNumber: true, primaryColor: true } }).catch(() => null)) ?? {};
+      const vars = m.vars ?? {}; const subject = m.subject ?? emailSubject(m.template, vars, lang, body.slice(0, 80));
+      const info = await smtp().sendMail({ from: process.env.EMAIL_FROM ?? process.env.SMTP_USER ?? 'no-reply@localhost', to: m.to, subject, text: emailText(m.template, vars, lang, co, body), html: emailHtml(m.template, vars, lang, co, body, subject), ...(process.env.EMAIL_REPLY_TO ? { replyTo: process.env.EMAIL_REPLY_TO } : {}), attachments: m.attachments });
       await log(db, companyId, 'email', ep, { to: m.to, subject: m.subject, attachments: (m.attachments ?? []).map((a) => a.filename) }, { id: info.messageId, accepted: info.accepted }, 'ok');
       return { ok: true, body };
     } catch (e: any) { await log(db, companyId, 'email', ep, { to: m.to, subject: m.subject }, null, 'retry', e.message); return { ok: false, error: e.message }; }
