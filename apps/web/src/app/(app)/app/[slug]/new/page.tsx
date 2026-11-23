@@ -14,7 +14,7 @@ export default function NewPage({ params }: { params: Promise<{ slug: string }> 
   if (ready && (!can(res, 'create') || res.sys || res.immutable)) return <NoAccess />;
   return (
     <>
-      <PageHeader title={`${t('New')} ${rl(res)}`} back={() => router.push(`/app/${slug}`)} />
+      <PageHeader title={`${t('New ')}${rl(res)}`} back={() => router.push(`/app/${slug}`)} />
       <ResourceForm res={res} mode="create" initial={initial} onCancel={() => router.push(`/app/${slug}`)} onSaved={(row) => router.replace(`/app/${slug}/${row.id}`)} />
     </>
   );

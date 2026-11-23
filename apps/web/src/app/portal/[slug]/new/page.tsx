@@ -11,5 +11,5 @@ export default function PortalNew({ params }: { params: Promise<{ slug: string }
   const { slug } = use(params); const res = BY_SLUG[slug]; const { t, rl } = useT(); const { can } = useAuth(); const router = useRouter(); const sp = useSearchParams();
   const initial = useMemo(() => { const o: Record<string, any> = {}; if (res) for (const f of res.fields) { const v = sp.get(f.name); if (v) o[f.name] = v; } return o; }, [res, sp]);
   if (!res || res.portal !== 'customer' || !can(res, 'create')) return <EmptyState icon="lock" title={t('Page not found')} />;
-  return (<><PageHeader title={`${t('New')} ${rl(res)}`} back={() => router.push(`/portal/${slug}`)} /><ResourceForm res={res} mode="create" initial={initial} onCancel={() => router.push(`/portal/${slug}`)} onSaved={(row) => router.replace(`/portal/${slug}/${row.id}`)} /></>);
+  return (<><PageHeader title={`${t('New ')}${rl(res)}`} back={() => router.push(`/portal/${slug}`)} /><ResourceForm res={res} mode="create" initial={initial} onCancel={() => router.push(`/portal/${slug}`)} onSaved={(row) => router.replace(`/portal/${slug}/${row.id}`)} /></>);
 }

@@ -629,7 +629,7 @@ const AR: Record<string, string> = {
   'Send a request and suppliers will quote it.': 'أرسل طلباً وسيقوم الموردون بتسعيره.',
   'View statement': 'عرض الكشف',
   'Nothing is due': 'لا شيء مستحق',
-  Save: 'حفظ', Cancel: 'إلغاء', Delete: 'حذف', Edit: 'تعديل', New: 'جديد', Create: 'إنشاء', Search: 'بحث', Filter: 'تصفية', Export: 'تصدير', Import: 'استيراد', Close: 'إغلاق', Back: 'رجوع', Next: 'التالي', Previous: 'السابق',
+  'New ': 'إضافة ', Save: 'حفظ', Cancel: 'إلغاء', Delete: 'حذف', Edit: 'تعديل', New: 'جديد', Create: 'إنشاء', Search: 'بحث', Filter: 'تصفية', Export: 'تصدير', Import: 'استيراد', Close: 'إغلاق', Back: 'رجوع', Next: 'التالي', Previous: 'السابق',
   Confirm: 'تأكيد', Submit: 'إرسال', Loading: 'جارٍ التحميل', Retry: 'إعادة المحاولة', Actions: 'إجراءات', Details: 'التفاصيل', Lines: 'البنود', History: 'السجل', Attachments: 'المرفقات', Status: 'الحالة', All: 'الكل',
   'Sign in': 'تسجيل الدخول', 'Sign out': 'تسجيل الخروج', Email: 'البريد الإلكتروني', Password: 'كلمة المرور', 'Welcome back': 'مرحباً بعودتك', 'Verification code': 'رمز التحقق',
   Dashboard: 'لوحة المعلومات', Home: 'الرئيسية', Notifications: 'الإشعارات', Approvals: 'الاعتمادات', Assistant: 'المساعد الذكي', Reports: 'التقارير', Settings: 'الإعدادات', Dashboards: 'لوحات المعلومات',

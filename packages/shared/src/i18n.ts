@@ -121,11 +121,26 @@ export function labelEn(name: string): string {
   return w.map((x) => UP[x] ?? cap(x)).join(' ');
 }
 
+// English "modifier + noun" (unit price, due date, bank name) is "noun + modifier" in Arabic (سعر الوحدة, تاريخ الاستحقاق, اسم البنك).
+// Labels that end in a preposition or % ("sent at", "valid from", "margin %") already read correctly in English order.
+const KEEP_ORDER_LAST = new Set(['at', 'by', 'from', 'to', 'until', 'pct', 'in', 'on', 'for', 'of', 'as']);
+const ADJECTIVE_FIRST = new Set(['min', 'max', 'primary', 'secondary', 'default', 'last', 'net', 'gross', 'new', 'old', 'current', 'internal', 'external', 'partial', 'full', 'late', 'early']);
+Object.assign(PHRASES, {
+  name_ar: 'الاسم بالعربية', name_en: 'الاسم بالإنجليزية', lead_time_days: 'مدة التوريد (أيام)', payment_terms_days: 'مدة السداد (أيام)', serial_no: 'الرقم التسلسلي',
+  journal_entry: 'قيد اليومية', vat_number: 'الرقم الضريبي', cr_number: 'رقم السجل التجاري', vat_pct: 'نسبة الضريبة %', discount_pct: 'نسبة الخصم %', margin_pct: 'نسبة الهامش %',
+  on_time_pct: 'نسبة الالتزام بالموعد %', supplier_part_no: 'رقم قطعة المورد', sales_order_line: 'بند أمر المبيعات', sales_order: 'أمر المبيعات', file_name: 'اسم الملف', bank_account: 'الحساب البنكي',
+});
+
 export function labelAr(name: string): string {
   const w = words(name.replace(/Id$/, ''));
   if (PHRASES[w.join('_')]) return PHRASES[w.join('_')];
-  const out = w.map((x) => (x in AR ? AR[x] : labelEn(x))).filter(Boolean);
-  return out.join(' ') || labelEn(name);
+  const parts = w.map((x) => ({ x, a: x in AR ? AR[x] : labelEn(x) })).filter((p) => p.a);
+  if (parts.length >= 2 && !KEEP_ORDER_LAST.has(parts[parts.length - 1].x)) {
+    const rev = parts.slice().reverse();
+    if (!ADJECTIVE_FIRST.has(parts[0].x) && rev[0].a.startsWith('ال') && rev[0].a.length > 4) rev[0] = { ...rev[0], a: rev[0].a.slice(2) };
+    return rev.map((p) => p.a).join(' ');
+  }
+  return parts.map((p) => p.a).join(' ') || labelEn(name);
 }
 
 export function enumLabel(v: string, lang: 'en' | 'ar'): string {

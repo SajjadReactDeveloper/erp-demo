@@ -54,7 +54,7 @@ export function ResourceList({ res, baseFilter, embedded, title, hideStatusChips
       </div>}
       {query.isError ? <ErrorState error={query.error} onRetry={() => query.refetch()} /> : query.isLoading ? <SkeletonRows cols={cols.length || 4} /> : rows.length === 0 ? (
         filtered ? <EmptyState icon="search-x" title={t('No results found')} desc={t('Try a different search or clear the filters.')} action={<Button variant="secondary" onClick={() => { setQInput(''); set({ q: '', status: '', page: 1 }); }}>{t('Reset')}</Button>} />
-          : <EmptyState icon={res.icon} title={t('Nothing here yet')} desc={`${t('No')} ${rl(res, true)}`} action={canCreate ? <Button icon="plus" onClick={() => router.push(newHref ?? `${base}/${res.slug}/new`)}>{t('New')} {rl(res)}</Button> : undefined} />
+          : <EmptyState icon={res.icon} title={t('Nothing here yet')} desc={`${t('No')} ${rl(res, true)}`} action={canCreate ? <Button icon="plus" onClick={() => router.push(newHref ?? `${base}/${res.slug}/new`)}>{t('New ')}{rl(res)}</Button> : undefined} />
       ) : (
         <div className={cn('sticky-head transition-opacity', embedded ? '!max-h-[28rem]' : '!max-h-[calc(100vh-19rem)] min-h-[320px] md:min-h-0 md:flex-1 md:!max-h-none', query.isFetching && 'opacity-60')}>
           <table className="w-full min-w-[640px] text-sm">
@@ -77,7 +77,7 @@ export function ResourceList({ res, baseFilter, embedded, title, hideStatusChips
   return (
     <div className="flex flex-col md:h-full md:min-h-[420px]">
       <PageHeader title={title ?? rl(res, true)} sub={meta ? `${meta.total} ${t('results')}` : undefined}
-        actions={<>{actionsExtra}{canCreate && <Button icon="plus" onClick={() => router.push(newHref ?? `${base}/${res.slug}/new`)}>{t('New')} {rl(res)}</Button>}</>} />
+        actions={<>{actionsExtra}{canCreate && <Button icon="plus" onClick={() => router.push(newHref ?? `${base}/${res.slug}/new`)}>{t('New ')}{rl(res)}</Button>}</>} />
       {body}
     </div>
   );
