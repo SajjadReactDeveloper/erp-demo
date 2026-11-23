@@ -1,0 +1,13 @@
+{
+  "name": "autocquick-erp",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "db:up": "docker compose up -d db",
+    "gen": "pnpm --filter @erp/db gen",
+    "db:push": "pnpm --filter @erp/db push",
+    "db:seed": "pnpm --filter @erp/db seed",
+    "api": "pnpm --filter @erp/api dev",
+    "web": "pnpm --filter @erp/web dev"
+  }
+}

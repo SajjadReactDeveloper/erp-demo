@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Navy & Gold design system tokens (HSL triplets). Single light theme by design. */
+:root {
+  --navy: 215 68% 14%; --navy-hover: 212 59% 21%; --navy-light: 211 52% 24%;
+  --gold: 40 65% 53%; --gold-hover: 38 67% 44%; --gold-light: 41 100% 93%; --gold-text: 37 85% 29%; --gold-border: 41 77% 80%;
+  --bg: 220 33% 97%; --surface: 0 0% 100%; --surface-muted: 210 40% 96%; --border: 214 32% 91%; --gridline: 212 28% 94%;
+  --text: 221 38% 14%; --text-secondary: 215 16% 47%; --text-strong: 215 19% 35%;
+  --success: 142 72% 29%; --success-bg: 141 84% 93%; --warning: 21 90% 40%; --warning-bg: 34 100% 92%; --error: 0 74% 42%; --error-bg: 0 93% 94%; --info: 224 76% 48%; --info-bg: 223 100% 94%;
+}
+html { color-scheme: light; }
+body { @apply bg-bg text-fg text-body antialiased; font-feature-settings: 'tnum'; }
+[dir='rtl'] body { font-family: var(--font-arabic), var(--font-jakarta), system-ui, sans-serif; line-height: 1.7; }
+* { @apply border-line; }
+:focus-visible { outline: 2px solid hsl(var(--gold)); outline-offset: 2px; }
+::selection { background: hsl(var(--gold) / 0.3); }
+.skeleton { @apply relative overflow-hidden rounded-md bg-soft; }
+.skeleton::after { content: ''; @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/70 to-transparent; animation: shimmer 1.4s infinite; }
+[dir='rtl'] .skeleton::after { @apply translate-x-full bg-gradient-to-l; animation-name: shimmer-rtl; }
+@keyframes shimmer-rtl { 100% { transform: translateX(-100%); } }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono), ui-monospace, monospace; font-weight: 500; font-size: 12px; letter-spacing: 0; }
+.overline { @apply text-overline uppercase; }
+/* thin, calm scrollbars */
+* { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
+@media print { .no-print { display: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

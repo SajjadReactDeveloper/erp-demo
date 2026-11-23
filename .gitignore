@@ -1,0 +1,11 @@
+node_modules
+.next
+dist
+.env
+*.log
+uploads
+.playwright-mcp
+.turbo
+tsconfig.tsbuildinfo
+next-env.d.ts
+*.docx
