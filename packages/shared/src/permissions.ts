@@ -30,7 +30,7 @@ export const DEFAULT_ROLES: Record<string, { description: string; permissions: s
     description: 'Sales representative',
     permissions: [
       'mod:sales:*', 'mod:masterdata:read', 'res:customer:*', 'res:customer-contact:*', 'res:customer-address:*', 'res:vehicle:*', 'res:rfq:read', 'res:award:read', 'res:supplier-quote:read', 'res:supplier-quote-line:read',
-      'res:credit-profile:read', 'res:credit-hold:read', 'res:invoice:read', 'res:delivery-note:read', 'res:sales-order:*', 'res:sales-order-line:*', 'res:purchase-order:read', 'res:approval-request:read',
+      'res:credit-profile:read', 'res:credit-hold:read', 'res:invoice:read', 'res:delivery-note:read', 'res:delivery-note:assign', 'res:delivery-line:read', 'res:delivery-event:read', 'res:proof-of-delivery:read', 'res:sales-order:*', 'res:sales-order-line:*', 'res:purchase-order:read', 'res:approval-request:read',
     ],
   },
   purchasing: {

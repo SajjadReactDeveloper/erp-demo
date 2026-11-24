@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { prisma } from '@erp/db';
+import { DEFAULT_ROLES } from '@erp/shared';
 import { HttpError } from './core/base';
 import { registerCrud } from './core/crud';
 import { registerAuth } from './routes/auth';
@@ -90,6 +91,14 @@ app.get('/health', async () => {
 registerAuth(app);
 registerCrud(app);
 await registerRoutes(app);
+
+// Additive sync: roles already stored in the database pick up permissions added to the defaults later (never removes any)
+try {
+  for (const role of await prisma.role.findMany({ where: { name: { in: Object.keys(DEFAULT_ROLES) } } })) {
+    const have = ((role.permissions as any) ?? []) as string[]; const add = DEFAULT_ROLES[role.name].permissions.filter((p) => !have.includes(p));
+    if (add.length && !have.includes('*')) await prisma.role.update({ where: { id: role.id }, data: { permissions: [...have, ...add] } });
+  }
+} catch (e) { app.log.warn({ err: String(e) }, 'role permission sync skipped'); }
 
 await app.listen({ port: PORT, host: '0.0.0.0' });
 if (process.env.DISABLE_WORKER !== '1') startWorker();

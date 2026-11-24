@@ -318,7 +318,7 @@ export function registerCrud(app: FastifyInstance) {
   app.get('/api/v1/r/:slug/options', { preHandler: authenticate }, async (req: any) => {
     const ctx: Ctx = req.ctx;
     const res = getRes(req.params.slug);
-    authorize(ctx, res, 'read');
+    if (!(ctx.kind === 'staff' && res.key === 'User')) authorize(ctx, res, 'read'); // staff may pick a colleague (name only) in assign dialogs without full user-management rights
     const q = req.query as any;
     const limit = Math.min(50, Number(q.limit) || 20);
     const ids = q.ids ? String(q.ids).split(',') : null;
