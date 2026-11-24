@@ -514,12 +514,18 @@ export function VehicleDashboard({ url }: { url: string }) {
   );
 }
 
+function ZatcaQr({ id }: { id: string }) {
+  const { t } = useT(); const q = useGet<{ data: { svg: string | null } }>(['zatca-qr', id], `/api/v1/finance/zatca-qr/${id}`);
+  if (q.isLoading) return <Card className="grid min-w-[220px] place-items-center p-5"><SkeletonRows rows={4} cols={1} /></Card>;
+  const svg = q.data?.data.svg; if (!svg) return null;
+  return <Card className="grid min-w-[220px] place-items-center p-5"><div className="rounded-lg bg-white p-1 [&>svg]:h-44 [&>svg]:w-44" dangerouslySetInnerHTML={{ __html: svg }} /><p className="mt-2 flex items-center gap-1.5 text-center text-xs font-semibold text-muted"><QrCode size={14} className="text-primary" />{t('ZATCA QR code')}</p></Card>;
+}
 function ZatcaPanel({ row }: { row: any }) {
   const { t, lang } = useT();
   return (
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-[1fr_auto]"><Card className="p-5"><dl className="grid gap-4 sm:grid-cols-2 text-sm">{[['UUID', row.zatcaUuid], ['ICV', row.zatcaIcv], ['Hash', row.zatcaHash], ['PIH', row.zatcaPih], [t('Status'), row.zatcaStatus]].map(([k, v]) => <div key={String(k)} className="min-w-0"><dt className="text-xs font-semibold text-muted">{k}</dt><dd className="num break-all" dir="ltr">{v ?? '—'}</dd></div>)}</dl></Card>
-        {row.zatcaQr && <Card className="grid place-items-center p-5"><QrCode size={42} className="text-primary" /><p className="mt-2 text-center text-xs text-muted">{t('QR is embedded in the printed invoice')}</p></Card>}</div>
+        <ZatcaQr id={row.id} /></div>
       <ResourceList res={BY_KEY.ZatcaSubmission} embedded baseFilter={{ invoiceId: row.id }} limit={10} />
       <p className="text-xs text-muted">{lang === 'ar' ? 'الوضع الحالي: محاكاة. للربط الفعلي يلزم رمز CSID الإنتاجي من هيئة الزكاة.' : 'Current mode: simulation. Live clearance needs the production CSID issued by ZATCA.'}</p>
     </div>

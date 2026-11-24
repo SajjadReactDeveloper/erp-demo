@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import type { FastifyInstance } from 'fastify';
 import Papa from 'papaparse';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -276,6 +277,11 @@ export function registerOpsRoutes(app: FastifyInstance) {
     const dates = lines.map((l) => l.txnDate.getTime());
     const st = await prisma.$transaction((tx) => createRow(tx, ctx, BY_KEY.BankStatement, { bankAccountId, fileName: filename, periodStart: new Date(Math.min(...dates)).toISOString(), periodEnd: new Date(Math.max(...dates)).toISOString(), lineCount: lines.length, children: { BankStatementLine: lines.map((l) => ({ ...l, txnDate: l.txnDate.toISOString(), matchStatus: 'unmatched' })) } }, { trusted: true }));
     return { data: { id: st.id, lines: lines.length }, message: `${lines.length} line(s) imported. Run auto-match next.` };
+  });
+  app.get('/api/v1/finance/zatca-qr/:invoiceId', { preHandler: authenticate }, async (req: any) => {
+    const ctx: Ctx = req.ctx; need(ctx, 'finance', 'invoice');
+    const inv = await prisma.invoice.findFirst({ where: { id: req.params.invoiceId, companyId: ctx.companyId }, select: { zatcaQr: true } }); if (!inv) throw notFound('Invoice');
+    return { data: { svg: inv.zatcaQr ? await QRCode.toString(inv.zatcaQr, { type: 'svg', margin: 1, width: 180 }) : null } };
   });
   app.get('/api/v1/finance/lineage/:invoiceId', { preHandler: authenticate }, async (req: any) => {
     const ctx: Ctx = req.ctx; need(ctx, 'finance', 'invoice');
