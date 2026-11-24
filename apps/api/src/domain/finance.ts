@@ -196,7 +196,14 @@ async function afterPayment(tx: Tx, ctx: Ctx, customerId: string) {
   // broken/kept promises
   await tx.promiseToPay.updateMany({ where: { companyId: ctx.companyId, customerId, status: 'open', invoice: { balance: { lte: 0 } } }, data: { status: 'kept' } });
 }
-A('Receipt.post', async ({ ctx, tx, row }) => { await postReceipt(tx, ctx, row); return { message: 'Receipt posted' }; });
+A('Receipt.post', async ({ ctx, tx, row }) => {
+  // "Post & allocate": with no allocation lines entered, settle the customer's oldest open invoices first
+  const manual = await tx.receiptAllocation.count({ where: { receiptId: row.id } });
+  await postReceipt(tx, ctx, row);
+  if (manual) return { message: 'Receipt posted' };
+  const n = await allocateOldestFirst(tx, ctx, await tx.receipt.findUniqueOrThrow({ where: { id: row.id } }));
+  return { message: n ? `Receipt posted and allocated to ${n} invoice(s), oldest first` : 'Receipt posted (no open invoices: kept as customer credit)' };
+});
 async function allocateOldestFirst(tx: Tx, ctx: Ctx, rc: any) {
   let left = D(rc.unappliedAmount);
   if (left.lte(0)) return 0;
