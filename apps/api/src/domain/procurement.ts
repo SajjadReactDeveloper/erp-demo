@@ -1,6 +1,6 @@
 import { BY_KEY } from '@erp/shared';
 import { Tx } from '@erp/db';
-import { A, Ctx, D, H, addDays, approvalCallbacks, bad, canApprove, conflict, emit, forbidden, getSetting, notifyRole, notifyUsers, num, r2, sys, today, audit } from '../core/base';
+import { A, handlers, Ctx, D, H, addDays, approvalCallbacks, bad, canApprove, conflict, emit, forbidden, getSetting, notifyRole, notifyUsers, num, r2, sys, today, audit } from '../core/base';
 import { createRow } from '../core/crud';
 import { needsApproval, requestApproval } from '../core/approvals';
 import { bestValue, lineTotals, warrantyMonths } from '../services/pricing';
@@ -164,7 +164,22 @@ A('Award.confirm', async ({ ctx, tx, row }) => {
   for (const s of quoted) if (!winners.has(s.supplierId)) await notifyUsers(tx, ctx.companyId, await supplierUsers(tx, s.supplierId), { title: 'RFQ result', body: 'Thank you for quoting. This time the order was awarded to another supplier.', link: `/supplier/rfqs/${row.rfqId}`, type: 'rfq' });
   for (const w of winners) await notifyUsers(tx, ctx.companyId, await supplierUsers(tx, w!), { title: 'You were awarded items', link: `/supplier/rfqs/${row.rfqId}`, severity: 'info', type: 'rfq' });
   await tx.rfq.update({ where: { id: row.rfqId }, data: { status: 'awarded' } });
-  return { set: { awardedById: ctx.userId }, message: 'Award confirmed. Build the customer quotation next.' };
+  // the sales team should not have to start the quotation by hand: create the draft and fill it from this award
+  let qNo = '';
+  try {
+    const rfq = await tx.rfq.findUnique({ where: { id: row.rfqId } });
+    const req = rfq?.requestId ? await tx.request.findUnique({ where: { id: rfq.requestId } }) : null;
+    if (req) {
+      const open = await tx.quotation.findFirst({ where: { requestId: req.id, status: { notIn: ['rejected', 'cancelled'] } } });
+      if (!open) {
+        await tx.award.update({ where: { id: row.id }, data: { status: 'confirmed' } }); // the build step reads confirmed awards
+        const q = await createRow(tx, ctx, BY_KEY.Quotation, { requestId: req.id, customerId: req.customerId, status: 'draft' }, { trusted: true });
+        await handlers['Quotation.build']?.({ ctx, tx, row: q, body: {} } as any);
+        qNo = q.number;
+      }
+    }
+  } catch { /* the quotation can still be created and built manually */ }
+  return { set: { awardedById: ctx.userId }, message: qNo ? `Award confirmed. Draft quotation ${qNo} was created and filled from the award. Open it to review margins and send.` : 'Award confirmed. Build the customer quotation next.' };
 });
 H('AwardLine', {
   beforeCreate: async ({ tx, data }) => { const a = await tx.award.findUnique({ where: { id: data.awardId } }); if (a?.status === 'confirmed') throw conflict('The award is confirmed and cannot be changed', 'invalid_state'); },

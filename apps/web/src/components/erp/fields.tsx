@@ -1,4 +1,5 @@
 'use client';
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -16,12 +17,13 @@ export const useDebounced = <T,>(v: T, ms = 300) => { const [d, setD] = useState
 export function RefPicker({ resKey, value, onChange, filter, disabled, placeholder, invalid, multiple }: { resKey: string; value: any; onChange: (v: any) => void; filter?: Record<string, string>; disabled?: boolean; placeholder?: string; invalid?: boolean; multiple?: boolean }) {
   const { t, rl } = useT(); const res = BY_KEY[resKey];
   const [open, setOpen] = useState(false); const [q, setQ] = useState(''); const dq = useDebounced(q, 250);
-  const box = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null); const pop = useRef<HTMLDivElement>(null); const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number; max: number } | null>(null);
   const ids: string[] = multiple ? (value ?? []) : value ? [value] : [];
   const opts = useQuery({ queryKey: ['options', resKey, dq, filter], enabled: open, queryFn: () => api<{ data: { id: string; label: string }[] }>(`/api/v1/r/${res.slug}/options`, { query: { q: dq, limit: 20, ...Object.fromEntries(Object.entries(filter ?? {}).map(([k, v]) => [`f.${k}`, v])) } }), staleTime: 15000 });
   const labels = useQuery({ queryKey: ['option-labels', resKey, ids.join(',')], enabled: ids.length > 0, queryFn: () => api<{ data: { id: string; label: string }[] }>(`/api/v1/r/${res.slug}/options`, { query: { ids: ids.join(','), limit: 50 } }), staleTime: 60000 });
-  useEffect(() => { const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
+  useEffect(() => { const h = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node) && !pop.current?.contains(e.target as Node)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
   const labelOf = (id: string) => labels.data?.data.find((x) => x.id === id)?.label ?? opts.data?.data.find((x) => x.id === id)?.label ?? '…';
+  useEffect(() => { if (!open) return; const place = () => { const r = box.current?.getBoundingClientRect(); if (!r) return; const below = window.innerHeight - r.bottom, up = below < 300 && r.top > below; setPos({ left: r.left, width: r.width, ...(up ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }), max: Math.max(180, (up ? r.top : below) - 24) }); }; place(); window.addEventListener('resize', place); window.addEventListener('scroll', place, true); return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); }; }, [open]);
   const pick = (id: string) => { if (multiple) onChange(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]); else { onChange(id); setOpen(false); } };
   return (
     <div ref={box} className="relative">
@@ -32,10 +34,10 @@ export function RefPicker({ resKey, value, onChange, filter, disabled, placehold
         </span>
         <span className="flex items-center gap-1">{!multiple && value && !disabled && <X size={14} className="text-muted hover:text-fg" onClick={(e) => { e.stopPropagation(); onChange(null); }} />}<ChevronDown size={16} className="text-muted" /></span>
       </button>
-      {open && (
-        <div className="absolute z-40 mt-1 w-full min-w-56 rounded-xl border border-line bg-card p-2 shadow-2xl animate-in">
+      {open && pos && createPortal(
+        <div ref={pop} style={{ position: 'fixed', left: pos.left, width: Math.max(pos.width, 224), top: pos.top, bottom: pos.bottom }} className="z-[100] rounded-xl border border-line bg-card p-2 shadow-2xl animate-in">
           <div className="relative mb-2"><Search size={14} className="pointer-events-none absolute start-2.5 top-3 text-muted" /><Input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Type to search...')} className="ps-8" /></div>
-          <ul role="listbox" className="max-h-56 overflow-y-auto">
+          <ul role="listbox" style={{ maxHeight: Math.min(pos.max - 64, 288) }} className="overflow-y-auto">
             {opts.isLoading && <li className="grid place-items-center py-4"><Spinner /></li>}
             {opts.isError && <li className="px-2 py-3 text-xs text-danger">{(opts.error as any)?.message}</li>}
             {opts.data?.data.length === 0 && <li className="px-2 py-3 text-center text-xs text-muted">{t('No results found')}</li>}
@@ -45,8 +47,7 @@ export function RefPicker({ resKey, value, onChange, filter, disabled, placehold
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        </div>, document.body)}
     </div>
   );
 }
