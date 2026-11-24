@@ -3,13 +3,14 @@ import { useRef, useState, type ComponentType, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BY_KEY, type ResourceDef } from '@erp/shared';
-import { Check, FileText, Printer, QrCode, ShieldAlert } from 'lucide-react';
+import { Calendar, Check, FileText, Gauge as GaugeIcon, Printer, QrCode, ShieldAlert, Wrench } from 'lucide-react';
 import { api, openDoc } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
-import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from '@/lib/format';
-import { Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field, Icon, Input, Modal, SkeletonCards, SkeletonRows, Stat, StatusBadge, Textarea, cn, toast } from '@/components/ui';
-import { BarCard, LineCard, PieCard } from '@/components/charts';
+import { fmtCompact, fmtDate, fmtDateTime, fmtMoney, fmtNum } from '@/lib/format';
+import { Badge, Button, Card, CardHeader, EmptyState, ErrorState, Field, Icon, Input, Modal, Segmented, SkeletonCards, SkeletonRows, Stat, StatusBadge, Textarea, cn, toast } from '@/components/ui';
+import { BarCard, LineCard, PieCard, SalesOverviewChart } from '@/components/charts';
+import { Chip, Kpi, ROW2 } from './dash';
 import { RefPicker } from './fields';
 import { ResourceList } from './list';
 import { SignaturePad, type SigHandle } from './signature';
@@ -262,15 +263,251 @@ function CreditTab({ id }: { id: string }) {
 }
 
 export function VehicleDashboard({ url }: { url: string }) {
-  const { t, lang } = useT(); const q = useGet<{ data: any }>(['veh-dash', url], url);
-  if (q.isLoading) return <div className="space-y-4"><SkeletonCards n={3} /></div>; if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />; const d = q.data!.data;
+  const { t, lang } = useT();
+  const [chartTab, setChartTab] = useState<'month' | 'category' | 'vehicle'>('month');
+  const q = useGet<{ data: any }>(['veh-dash', url], url);
+  if (q.isLoading) return <div className="space-y-4"><SkeletonCards n={4} /></div>;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  const d = q.data!.data;
+  const spend = Number(d.totals?.spend ?? 0);
+  const vehCount = Number(d.totals?.vehicles ?? 0);
+  const avgPerVeh = vehCount > 0 ? spend / vehCount : 0;
+  const upcoming: any[] = d.upcoming ?? [];
+  const history: any[] = d.history ?? [];
+  const byMonth: any[] = d.byMonth ?? [];
+  const byCategory: any[] = d.byCategory ?? [];
+  const byVehicle: any[] = d.byVehicle ?? [];
+  const hasMonthSpend = byMonth.some((x) => Number(x.value ?? 0) > 0);
+  const hasCatSpend = byCategory.some((x) => Number(x.value ?? 0) > 0);
+  const nextService = upcoming[0];
+
+  const chartOptions = [
+    { key: 'month', label: t('By month') },
+    { key: 'category', label: t('By category') },
+    ...(byVehicle.length > 1 ? [{ key: 'vehicle', label: t('By vehicle') }] : []),
+  ];
+
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3"><Stat label={t('Total spend (12 months)')} value={fmtMoney(d.totals.spend, lang)} icon="wallet" /><Stat label={t('Vehicles')} value={d.totals.vehicles} icon="car" /><Stat label={t('Upcoming services')} value={d.upcoming.length} icon="wrench" tone="warn" /></div>
-      <div className="grid gap-5 lg:grid-cols-2"><PieCard title={t('Spend by category')} data={d.byCategory} h={260} /><LineCard title={t('Spend by month')} data={d.byMonth} xKey="name" area h={260} /></div>
-      {d.byVehicle.length > 1 && <BarCard title={t('Spend per vehicle')} data={d.byVehicle} h={240} />}
-      <Card><CardHeader title={t('Upcoming service needs')} />{d.upcoming.length === 0 ? <p className="p-5 text-sm text-muted">{t('No service is due soon.')}</p> : <ul className="divide-y divide-line">{d.upcoming.map((u: any) => <li key={u.id} className="flex items-center justify-between px-5 py-3 text-sm"><div><b>{u.service}</b><p className="text-xs text-muted">{u.vehicle}</p></div><div className="text-end text-xs"><p className="num">{u.dueDate ? fmtDate(u.dueDate, lang) : ''} {u.dueMileage ? `· ${u.dueMileage} km` : ''}</p><StatusBadge value={u.status} /></div></li>)}</ul>}</Card>
-      <Card><CardHeader title={t('Maintenance & purchase history')} />{d.history.length === 0 ? <EmptyState icon="history" title={t('No history yet')} /> : <div className="sticky-head"><table className="w-full min-w-[640px] text-sm"><thead><tr className="bg-line/25 text-xs text-muted"><th className="p-2.5 text-start">{t('Date')}</th><th className="p-2.5 text-start">{t('Vehicle')}</th><th className="p-2.5 text-start">{t('Item')}</th><th className="p-2.5 text-start">{t('Category')}</th><th className="p-2.5 text-start">{t('Amount')}</th></tr></thead><tbody className="divide-y divide-line">{d.history.map((h: any, i: number) => <tr key={i}><td className="num p-2.5">{fmtDate(h.date, lang)}</td><td className="p-2.5">{h.vehicle}</td><td className="p-2.5">{h.description}</td><td className="p-2.5"><Badge>{h.category}</Badge></td><td className="num p-2.5">{fmtMoney(h.amount, lang)}</td></tr>)}</tbody></table></div>}</Card>
+      {/* 4-Column Executive Fleet KPI Rail */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
+        <Kpi
+          featured
+          icon="wallet"
+          tone="primary"
+          label={t('Total spend (12 months)')}
+          sub={t('Parts & maintenance invoices')}
+          value={
+            <span className="num">
+              <span className="me-1.5 text-[0.5em] font-semibold tracking-wide opacity-55">{lang === 'ar' ? 'ر.س' : 'SAR'}</span>
+              {fmtNum(spend, lang, 2)}
+            </span>
+          }
+          chip={<Chip tone="gold">{t('Last 12 months')}</Chip>}
+          spark={
+            <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-muted">
+              <span className="num truncate">{t('Avg / vehicle')} {fmtCompact(avgPerVeh)}</span>
+              <span className="num shrink-0 font-semibold text-gold-text">{history.length} {t('Service records')}</span>
+            </div>
+          }
+        />
+
+        <Kpi
+          icon="car"
+          tone="info"
+          label={t('Vehicles')}
+          sub={vehCount > 1 ? t('Whole fleet') : t('Tracked vehicle')}
+          value={vehCount}
+          chip={<Chip tone="success">{t('Active')}</Chip>}
+          spark={
+            <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-muted">
+              <span>{t('VIN-verified garage')}</span>
+              <span className="num font-semibold text-strong">{byCategory.length} {t('Categories')}</span>
+            </div>
+          }
+        />
+
+        <Kpi
+          icon="wrench"
+          tone="warn"
+          label={t('Upcoming services')}
+          sub={t('Preventive maintenance schedule')}
+          value={upcoming.length}
+          chip={<Chip tone={upcoming.length > 0 ? 'warn' : 'success'}>{upcoming.length > 0 ? t('Scheduled') : t('All caught up')}</Chip>}
+          spark={
+            <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-muted">
+              <span className="truncate">{nextService ? `${t('Next:')} ${nextService.service}` : t('No service is due soon.')}</span>
+              {nextService?.dueDate && <span className="num shrink-0 font-semibold text-strong">{fmtDate(nextService.dueDate, lang)}</span>}
+            </div>
+          }
+        />
+
+        <Kpi
+          icon="history"
+          tone="success"
+          label={t('Service records')}
+          sub={t('Completed maintenance & parts')}
+          value={history.length}
+          chip={<Chip tone={history.length > 0 ? 'info' : 'muted'}>{history.length > 0 ? t('Logged') : t('No history yet')}</Chip>}
+          spark={
+            <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-muted">
+              <span className="truncate">{history[0]?.date ? `${t('Latest')} ${fmtDate(history[0].date, lang)}` : t('Awaiting first order')}</span>
+              <span className="num shrink-0 font-semibold text-strong">{fmtCompact(spend)}</span>
+            </div>
+          }
+        />
+      </section>
+
+      {/* Main Analytics (2/3) + Upcoming Service Schedule (1/3) */}
+      <section className={ROW2}>
+        <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
+          <CardHeader
+            title={t('Spend analytics')}
+            sub={t('12-month parts & maintenance breakdown')}
+            actions={
+              <Segmented
+                label={t('View')}
+                value={chartTab}
+                onChange={(k) => setChartTab(k as typeof chartTab)}
+                options={chartOptions}
+              />
+            }
+          />
+          <div className="flex flex-1 flex-col justify-center px-4 pb-4 pt-2">
+            {chartTab === 'month' ? (
+              hasMonthSpend ? (
+                <SalesOverviewChart data={byMonth} h={255} avgLabel={t('Avg')} />
+              ) : (
+                <div className="mx-2 my-3 flex flex-col items-center justify-center rounded-md border border-dashed border-line bg-soft/40 px-6 py-12 text-center">
+                  <span className="grid h-11 w-11 place-items-center rounded-md bg-gold-light text-gold-text">
+                    <Icon name="bar-chart-3" size={20} />
+                  </span>
+                  <p className="mt-3 text-small font-bold text-navy">{t('No recorded spend yet')}</p>
+                  <p className="mt-1 max-w-sm text-caption text-muted">
+                    {t('Completed orders and invoices linked to your vehicles will populate monthly and category analytics automatically.')}
+                  </p>
+                </div>
+              )
+            ) : chartTab === 'category' ? (
+              hasCatSpend ? (
+                <PieCard bare title="" data={byCategory} h={255} />
+              ) : (
+                <div className="mx-2 my-3 flex flex-col items-center justify-center rounded-md border border-dashed border-line bg-soft/40 px-6 py-12 text-center">
+                  <span className="grid h-11 w-11 place-items-center rounded-md bg-gold-light text-gold-text">
+                    <Icon name="pie-chart" size={20} />
+                  </span>
+                  <p className="mt-3 text-small font-bold text-navy">{t('No recorded spend yet')}</p>
+                  <p className="mt-1 max-w-sm text-caption text-muted">
+                    {t('Completed orders and invoices linked to your vehicles will populate monthly and category analytics automatically.')}
+                  </p>
+                </div>
+              )
+            ) : (
+              <BarCard bare title="" data={byVehicle} h={255} />
+            )}
+          </div>
+        </Card>
+
+        {/* Right 1/3: Polished Upcoming Service Schedule */}
+        <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
+          <div className="relative border-b border-line/80 bg-gradient-to-b from-[#F4F7FC] to-white px-5 py-4">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#3B669C] via-gold to-gold/30" aria-hidden />
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-card-title text-navy">{t('Upcoming service needs')}</h3>
+                <p className="mt-0.5 text-caption text-muted">{t('Preventive maintenance schedule')}</p>
+              </div>
+              {upcoming.length > 0 && <Badge tone="gold">{upcoming.length}</Badge>}
+            </div>
+          </div>
+
+          <div className="flex-1 p-4">
+            {upcoming.length === 0 ? (
+              <EmptyState icon="check-circle-2" title={t('All caught up')} desc={t('No service is due soon.')} />
+            ) : (
+              <div className="space-y-2.5">
+                {upcoming.map((u: any) => (
+                  <div
+                    key={u.id}
+                    className="rounded-md border border-line/90 bg-soft/35 p-3.5 transition-colors hover:border-gold-border hover:bg-card"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-sm bg-gold-light text-gold-text">
+                          <Wrench size={14} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-small font-bold text-navy">{u.service}</p>
+                          <p className="truncate text-caption text-muted">{u.vehicle}</p>
+                        </div>
+                      </div>
+                      <StatusBadge value={u.status} />
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line/70 pt-2.5 text-[11.5px] text-muted">
+                      <span className="num inline-flex items-center gap-1.5 font-medium text-strong">
+                        <Calendar size={12} className="text-gold-text" />
+                        <span>{u.dueDate ? fmtDate(u.dueDate, lang) : '—'}</span>
+                      </span>
+                      {u.dueMileage ? (
+                        <span className="num inline-flex items-center gap-1 rounded-xs bg-card px-2 py-0.5 font-semibold text-navy ring-1 ring-line">
+                          <GaugeIcon size={11} className="text-muted" />
+                          <span>{fmtNum(u.dueMileage, lang, 0)} {t('km')}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
+
+      {/* Maintenance & Purchase History */}
+      <Card className="overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
+        <CardHeader
+          title={t('Maintenance & purchase history')}
+          sub={history.length > 0 ? `${history.length} ${t('Service records')}` : t('Invoices & replaced parts across your vehicles')}
+        />
+        {history.length === 0 ? (
+          <div className="p-6 pt-2">
+            <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-line bg-soft/35 px-6 py-10 text-center">
+              <span className="grid h-10 w-10 place-items-center rounded-md bg-soft text-navy">
+                <Icon name="history" size={18} />
+              </span>
+              <p className="mt-3 text-small font-bold text-navy">{t('No history yet')}</p>
+              <p className="mt-1 max-w-md text-caption text-muted">
+                {t('Parts purchased and maintenance performed for your vehicles will appear here with dates, categories and costs.')}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="sticky-head px-4 pb-4 pt-2">
+            <table className="w-full min-w-[640px] text-small">
+              <thead>
+                <tr className="bg-soft text-caption font-semibold text-strong">
+                  <th className="rounded-s-sm px-4 py-2.5 text-start">{t('Date')}</th>
+                  <th className="px-4 py-2.5 text-start">{t('Vehicle')}</th>
+                  <th className="px-4 py-2.5 text-start">{t('Item')}</th>
+                  <th className="px-4 py-2.5 text-start">{t('Category')}</th>
+                  <th className="rounded-e-sm px-4 py-2.5 text-end">{t('Amount')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {history.map((h: any, i: number) => (
+                  <tr key={i} className="transition-colors hover:bg-soft/55">
+                    <td className="num px-4 py-3 text-muted">{fmtDate(h.date, lang)}</td>
+                    <td className="px-4 py-3 font-medium text-fg">{h.vehicle}</td>
+                    <td className="px-4 py-3 text-strong">{h.description}</td>
+                    <td className="px-4 py-3"><Badge>{h.category}</Badge></td>
+                    <td className="num px-4 py-3 text-end font-semibold text-navy">{fmtMoney(h.amount, lang)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

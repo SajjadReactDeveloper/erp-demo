@@ -954,48 +954,31 @@ export default function DashboardPage({ params }: { params: Promise<{ name: stri
 
   return (
     <div className="space-y-5">
-      <DashHeader
-        title={title}
-        sub={desc}
-        actions={
-          ranged ? (
-            <Range
-              from={range.from}
-              to={range.to}
-              set={(f, to) => setRange({ from: f, to })}
-              onRefresh={() => q.refetch()}
-              refreshing={q.isFetching}
-            />
-          ) : (
-            <Button variant="secondary" size="sm" onClick={() => q.refetch()} aria-label={t('Refresh')} className="!h-9 gap-1.5">
-              <RefreshCw size={14} className={cn(q.isFetching && 'animate-spin')} />
-              <span>{t('Refresh')}</span>
-            </Button>
-          )
-        }
-      />
-
-      {/* Quick switcher bar across all 9 dashboards */}
-      <nav aria-label={t('Dashboards')} className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
-        {NAV_TABS.map((tab) => {
-          const active = tab.key === name;
-          return (
-            <Link
-              key={tab.key}
-              href={`/app/dashboards/${tab.key}`}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2.5 text-small font-semibold transition-colors',
-                active ? 'text-navy' : 'text-muted hover:text-fg'
-              )}
-            >
-              <Icon name={tab.icon} size={15} className={active ? 'text-gold-text' : 'text-muted'} />
-              <span>{lang === 'ar' ? tab.ar : tab.en}</span>
-              {active && <span className="absolute inset-x-2 bottom-0 h-[3px] bg-gold" />}
-            </Link>
-          );
-        })}
-      </nav>
+      <section className="relative overflow-hidden rounded-lg border border-navy bg-gradient-to-br from-[#0F294D] via-[#0B1F3A] to-[#08172E] p-5 text-white shadow-[0_8px_24px_rgba(11,31,58,0.16)] md:p-6">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_90%_10%,rgba(214,161,58,0.22),transparent_50%)]" aria-hidden />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-md border border-gold/30 bg-white/5 text-gold"><Icon name={NAV_TABS.find((x) => x.key === name)?.icon ?? 'layout-dashboard'} size={24} /></span>
+            <div className="min-w-0"><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">{t('Analytics')}</p><h1 className="text-2xl font-extrabold tracking-tight md:text-3xl">{title}</h1><p className="mt-1 max-w-2xl text-sm text-onnavy-secondary">{desc}</p></div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-fg">
+            {ranged ? <Range from={range.from} to={range.to} set={(f, to) => setRange({ from: f, to })} onRefresh={() => q.refetch()} refreshing={q.isFetching} /> : (
+              <Button variant="secondary" size="sm" onClick={() => q.refetch()} aria-label={t('Refresh')} className="!h-9 gap-1.5"><RefreshCw size={14} className={cn(q.isFetching && 'animate-spin')} /><span>{t('Refresh')}</span></Button>
+            )}
+          </div>
+        </div>
+        <nav aria-label={t('Dashboards')} className="relative mt-5 flex flex-wrap gap-1.5">
+          {NAV_TABS.map((tab) => {
+            const active = tab.key === name;
+            return (
+              <Link key={tab.key} href={`/app/dashboards/${tab.key}`} aria-current={active ? 'page' : undefined}
+                className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] font-semibold transition-all', active ? 'bg-gold text-navy shadow-md' : 'bg-white/10 text-onnavy-secondary hover:bg-white/20 hover:text-white')}>
+                <Icon name={tab.icon} size={15} /><span>{lang === 'ar' ? tab.ar : tab.en}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </section>
 
       {body}
     </div>

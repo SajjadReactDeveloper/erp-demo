@@ -295,7 +295,7 @@ export default function Home() {
         </section>
       )}
 
-      {/* Row 3: Sales overview + Midnight Navy Monthly target */}
+      {/* Row 3: Sales overview + Monthly target */}
       {hasFinance && (
         <section className={ROW2}>
           <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
@@ -320,7 +320,6 @@ export default function Home() {
                 </div>
               }
             />
-            {/* Seamless borderless editorial summary ribbon (no nested box) */}
             <div className="grid divide-y divide-line/70 border-y border-line/70 bg-soft/35 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x rtl:lg:divide-x-reverse">
               <div className="px-6 py-3.5">
                 <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted">{t('12-month total')}</p>
@@ -363,7 +362,6 @@ export default function Home() {
           </Card>
 
           <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
-            {/* Airy Pearl-to-White Target Chamber (no heavy dark block) */}
             <div className="relative overflow-hidden bg-gradient-to-b from-[#F4F7FC] via-[#FAFBFD] to-white px-6 pb-5 pt-5">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#3B669C] via-gold to-gold/30" aria-hidden />
               <div className="relative flex items-start justify-between gap-3">
@@ -434,7 +432,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Bottom Crisp White Category & Conversion Chamber */}
             <div className="flex flex-1 flex-col border-t border-line/80 bg-card px-6 py-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="overline text-muted">{t('Sales by category')}</p>

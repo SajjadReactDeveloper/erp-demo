@@ -18,6 +18,7 @@ export function DashHeader({ title, sub, actions }: { title: ReactNode; sub?: Re
   );
 }
 
+const ACCENT = { primary: 'border-t-gold', danger: 'border-t-danger', success: 'border-t-success', warn: 'border-t-warn', info: 'border-t-info' };
 const TILE = { primary: 'bg-gold-light text-gold-text', danger: 'bg-soft text-navy', success: 'bg-soft text-navy', warn: 'bg-soft text-navy', info: 'bg-soft text-navy' };
 
 export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, spark, href, featured }: { loading?: boolean; icon: string; tone?: keyof typeof TILE; label: string; sub?: ReactNode; value?: ReactNode; chip?: ReactNode; spark?: ReactNode; href?: string; featured?: boolean }) {
@@ -25,11 +26,11 @@ export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, 
   const inner = (
     <Card
       className={cn(
-        'group relative flex h-full min-h-[192px] flex-col overflow-hidden transition-all duration-200 animate-in',
+        (spark ? 'min-h-[192px]' : 'min-h-[132px]'), 'group relative flex h-full flex-col overflow-hidden transition-all duration-200 animate-in',
         href && 'cursor-pointer',
         featured
           ? 'border-gold-border/90 bg-gradient-to-br from-[#FFFDF7] via-white to-[#FBF4E4] shadow-[0_2px_10px_rgba(214,161,58,0.08)] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-gold before:via-[#F3CD77] before:to-gold/30 hover:border-gold hover:shadow-[0_12px_28px_rgba(214,161,58,0.14)]'
-          : 'border-line/90 bg-card shadow-[0_1px_2px_rgba(11,31,58,0.03)] hover:border-gold-border hover:shadow-[0_12px_26px_rgba(11,31,58,0.07)]'
+          : `${ACCENT[tone]} border-t-[3px] border-line/90 bg-card shadow-[0_1px_2px_rgba(11,31,58,0.03)] hover:border-gold-border hover:shadow-[0_12px_26px_rgba(11,31,58,0.07)]`
       )}
     >
       <div className="relative flex flex-1 flex-col p-5 pb-4">
@@ -58,7 +59,7 @@ export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, 
             />
           )}
         </div>
-        <div className="mt-4 flex items-baseline justify-between gap-2">
+        <div className="mt-auto flex items-end justify-between gap-2 pt-4">
           <p className="num text-[27px] font-bold leading-none tracking-[-0.025em] text-navy">{value ?? '—'}</p>
           {chip}
         </div>
@@ -81,7 +82,7 @@ export function Hero({ loading, icon, label, value, delta, stats, children, asid
       <Star className="pointer-events-none absolute -end-8 -top-12 text-gold opacity-[0.07]" size={170} />
       <div className="relative flex items-center justify-between gap-2"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-md border border-gold/20 bg-navy-light/90 text-gold"><Icon name={icon} size={18} /></span><p className="text-small font-medium text-onnavy-secondary">{label}</p></div>{delta}</div>
       {loading ? <Skeleton className="mt-4 h-9 w-48 !bg-navy-light" /> : <p className="relative mt-4 text-[34px] font-semibold leading-10 tracking-tight">{value}</p>}
-      {stats && <div className="relative mt-auto grid grid-cols-3 gap-3 border-t border-white/10 pt-3.5 md:max-w-[60%]">{stats.map(([l, v], i) => <div key={i}><p className="text-[11px] font-medium text-onnavy-muted">{l}</p><p className="num mt-0.5 truncate text-small font-semibold">{v}</p></div>)}</div>}
+      {stats && <div className="relative mt-auto grid grid-cols-3 gap-3 border-t border-white/10 pt-3.5 md:max-w-[70%]">{stats.map(([l, v], i) => <div key={i}><p className="whitespace-nowrap text-[11px] font-medium text-onnavy-muted">{l}</p><p className="num mt-0.5 truncate text-small font-semibold">{v}</p></div>)}</div>}
       {children && <div className="relative mt-auto pt-3">{children}</div>}
       {aside && <div className="relative mt-3 h-16 md:absolute md:bottom-0 md:end-0 md:mt-0 md:h-[58%] md:w-[40%]">{aside}</div>}
     </Card>
