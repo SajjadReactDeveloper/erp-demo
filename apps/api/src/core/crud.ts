@@ -9,6 +9,7 @@ import ExcelJS from 'exceljs';
 
 const snake = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
 const PORTAL_READ_GLOBAL = new Set(['Part', 'Brand', 'Category', 'Uom', 'LostReason', 'ServiceType', 'TaxCode', 'ServiceInterval']);
+const PORTAL_VIA: Record<string, { parent: string; fk: string }> = { DeliveryEvent: { parent: 'DeliveryNote', fk: 'deliveryNoteId' }, ProofOfDelivery: { parent: 'DeliveryNote', fk: 'deliveryNoteId' } };
 const API_CREATE_IMMUTABLE = new Set(['ScanEvent', 'DeliveryEvent', 'ProofOfDelivery', 'StockMovement', 'LoyaltyTxn']);
 
 // ---------- authorisation & portal scoping ----------
@@ -39,9 +40,10 @@ function portalScope(res: ResourceDef, ctx: Ctx): any | null {
   if (res.fields.some((f) => f.name === idField)) return { [idField]: idVal };
   if (res.key === 'Customer' && ctx.kind === 'customer') return { id: idVal };
   if (res.key === 'Supplier' && ctx.kind === 'supplier') return { id: idVal };
-  const parent = RESOURCES.find((p) => p.children.some((c) => c.key === res.key));
+  const via = PORTAL_VIA[res.key]; // records tied to a scoped parent by a foreign key but not listed as its children (delivery tracking, proof of delivery)
+  const parent = via ? RESOURCES.find((p) => p.key === via.parent) : RESOURCES.find((p) => p.children.some((c) => c.key === res.key));
   if (!parent) return null;
-  const fk = parent.children.find((c) => c.key === res.key)!.fk;
+  const fk = via ? via.fk : parent.children.find((c) => c.key === res.key)!.fk;
   const inner = portalScope(parent, ctx);
   return inner ? { [relName(fk)]: inner } : null;
 }
