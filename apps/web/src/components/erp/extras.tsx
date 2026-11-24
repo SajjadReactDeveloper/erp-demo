@@ -200,6 +200,8 @@ function AiMatchPanel({ row }: { row: any }) {
   );
 }
 function SourcingPanel({ row }: { row: any }) {
+  const { me } = useAuth(); // customers see only their quotations: RFQs and supplier prices are internal
+  if (me?.kind !== 'staff') return <ResourceList res={BY_KEY.Quotation} embedded baseFilter={{ requestId: row.id }} limit={5} />;
   return <div className="grid gap-5 lg:grid-cols-2"><ResourceList res={BY_KEY.Rfq} embedded baseFilter={{ requestId: row.id }} limit={5} /><ResourceList res={BY_KEY.Quotation} embedded baseFilter={{ requestId: row.id }} limit={5} /></div>;
 }
 function FulfilmentPanel({ row }: { row: any }) {

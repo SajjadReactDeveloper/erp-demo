@@ -18,15 +18,15 @@ async function supplierUsers(tx: Tx, supplierId: string) { return (await tx.user
 A('Rfq.select_suppliers', async ({ ctx, tx, row, body }) => {
   const ids: string[] = body?.supplierIds ?? [];
   if (!ids.length) throw bad('Choose at least one supplier');
-  let added = 0;
+  let added = 0, already = 0, inactive = 0;
   for (const supplierId of ids) {
     const sup = await tx.supplier.findFirst({ where: { id: supplierId, companyId: ctx.companyId, status: 'active' } });
-    if (!sup) continue;
-    if (await tx.rfqSupplier.findFirst({ where: { rfqId: row.id, supplierId } })) continue;
+    if (!sup) { inactive++; continue; }
+    if (await tx.rfqSupplier.findFirst({ where: { rfqId: row.id, supplierId } })) { already++; continue; }
     await tx.rfqSupplier.create({ data: { companyId: ctx.companyId, rfqId: row.id, supplierId, channel: body?.channel ?? (sup.whatsapp ? 'whatsapp' : 'email'), accessToken: crypto.randomUUID() } });
     added++;
   }
-  return { skip: true, message: `${added} supplier(s) added` };
+  return { skip: true, message: `${added} supplier(s) added${already ? `, ${already} already on this RFQ (suggested automatically)` : ''}${inactive ? `, ${inactive} not active` : ''}. Next: Send to suppliers.` };
 });
 A('Rfq.send', async ({ ctx, tx, row }) => {
   const sups = await tx.rfqSupplier.findMany({ where: { rfqId: row.id }, include: { supplier: true } });

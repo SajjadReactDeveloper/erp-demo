@@ -98,7 +98,24 @@ export function ActionBar({ res, row, onDone }: { res: ResourceDef; row: any; on
   );
 }
 import { RefPicker } from './fields';
-const RefMulti = (p: { resKey: string; value: any; onChange: (v: any) => void; filter?: any }) => <RefPicker {...p} multiple />;
+const SupplierChecklist = ({ value, onChange }: { value: any; onChange: (v: any) => void }) => {
+  const { t } = useT(); const sel: string[] = value ?? [];
+  const q = useQuery({ queryKey: ['suppliers-pick'], queryFn: () => api<any>('/api/v1/r/supplier', { query: { limit: 100, 'f.status': 'active', sort: 'name:asc' } }) });
+  if (q.isLoading) return <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>;
+  const rows: any[] = q.data?.data ?? []; const all = rows.length > 0 && sel.length === rows.length;
+  const toggle = (id: string) => onChange(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-small text-muted"><span>{sel.length} {t('selected')}</span><button type="button" className="font-semibold text-navy hover:underline" onClick={() => onChange(all ? [] : rows.map((r) => r.id))}>{all ? t('Clear all') : t('Select all')}</button></div>
+      <ul className="max-h-[46vh] space-y-2 overflow-y-auto pe-1">{rows.map((r) => { const on = sel.includes(r.id); const brands: string[] = Array.isArray(r.brands) ? r.brands.slice(0, 4) : [];
+        return (<li key={r.id}><button type="button" onClick={() => toggle(r.id)} aria-pressed={on} className={cn('flex w-full items-center gap-3 rounded-lg border p-3 text-start transition-all', on ? 'border-gold bg-gold-light shadow-sm' : 'border-line bg-card hover:border-gold-border')}>
+          <span className={cn('grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 transition-colors', on ? 'border-navy bg-navy text-white' : 'border-line bg-card text-transparent')}><Check size={14} /></span>
+          <span className="min-w-0 flex-1"><b className="block truncate text-sm text-navy">{r.name}</b><span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">{r.code && <span className="num">{r.code}</span>}{r.rating != null && <span>★ {Number(r.rating).toFixed(1)}</span>}{r.onTimePct != null && <span>{Math.round(Number(r.onTimePct))}% {t('on time')}</span>}{r.leadTimeDays != null && <span>{r.leadTimeDays} {t('days')}</span>}</span>{brands.length > 0 && <span className="mt-1.5 flex flex-wrap gap-1">{brands.map((b) => <Badge key={b} tone="muted">{b}</Badge>)}</span>}</span>
+        </button></li>); })}</ul>
+    </div>
+  );
+};
+const RefMulti = (p: { resKey: string; value: any; onChange: (v: any) => void; filter?: any }) => p.resKey === 'Supplier' ? <SupplierChecklist value={p.value} onChange={p.onChange} /> : <RefPicker {...p} multiple />;
 
 // ---- inline lines editor ----
 export function LinesEditor({ parent, child, rows, onChange, readOnly, errors }: { parent: ResourceDef; child: { key: string; fk: string }; rows: any[]; onChange: (r: any[]) => void; readOnly?: boolean; errors?: Record<string, string> }) {
@@ -463,7 +480,7 @@ function WorkflowBar({ res, status }: { res: ResourceDef; status?: string }) {
 // ---- the generic detail page ----
 export function ResourceDetail({ res, id }: { res: ResourceDef; id: string }) {
   const base = useBase();
-  const { t, lang, rl, fl } = useT(); const { can } = useAuth(); const router = useRouter(); const qc = useQueryClient();
+  const { t, lang, rl, fl } = useT(); const { can, me } = useAuth(); const router = useRouter(); const qc = useQueryClient();
   const [tab, setTab] = useState('details'); const [editing, setEditing] = useState(false); const [del, setDel] = useState(false);
   const q = useQuery({ queryKey: ['detail', res.slug, id], queryFn: ({ signal }) => api<{ data: any }>(`/api/v1/r/${res.slug}/${id}`, { signal }) });
   const remove = useMutation({ mutationFn: () => api(`/api/v1/r/${res.slug}/${id}`, { method: 'DELETE' }), onSuccess: () => { toast.success(t('Deleted')); qc.invalidateQueries({ queryKey: ['list', res.slug] }); router.replace(`${base}/${res.slug}`); }, onError: (e: any) => { setDel(false); toast.error(e.message); } });
@@ -478,7 +495,8 @@ export function ResourceDetail({ res, id }: { res: ResourceDef; id: string }) {
   const editable = can(res, 'update') && isEditable(res, row);
   const title = res.fields.find((f) => f.name === res.label) ? (row[res.label] ?? row.number ?? row.id.slice(0, 8)) : row.id.slice(0, 8);
   const refTitle = row._refs?.[res.label]?.label ?? title;
-  const extras = EXTRA_TABS[res.key]?.(row, res) ?? [];
+  const STAFF_ONLY = new Set(['Request:ai', 'Rfq:compare']); // customers and suppliers must not see AI matching or supplier price comparison
+  const extras = (EXTRA_TABS[res.key]?.(row, res) ?? []).filter((x) => me?.kind === 'staff' || !STAFF_ONLY.has(`${res.key}:${x.key}`));
   const tabs = [{ key: 'details', label: t('Details'), icon: 'file-text' }, ...res.children.map((c) => ({ key: `c:${c.key}`, label: rl(c.key, true), count: kids[c.key]?.length, icon: BY_KEY[c.key].icon })), ...extras.map((x) => ({ key: `x:${x.key}`, label: x.label, icon: x.icon })), { key: 'files', label: t('Attachments'), icon: 'paperclip' }, ...(can(res, 'read') ? [{ key: 'history', label: t('History'), icon: 'history' }] : [])];
 
   if (editing) return (
