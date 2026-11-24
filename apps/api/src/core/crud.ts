@@ -318,8 +318,10 @@ export function registerCrud(app: FastifyInstance) {
   app.get('/api/v1/r/:slug/options', { preHandler: authenticate }, async (req: any) => {
     const ctx: Ctx = req.ctx;
     const res = getRes(req.params.slug);
-    if (!(ctx.kind === 'staff' && res.key === 'User')) authorize(ctx, res, 'read'); // staff may pick a colleague (name only) in assign dialogs without full user-management rights
-    const q = req.query as any;
+    // staff may pick a colleague by name in assign dialogs without full user-management rights; that path only honours a tiny filter allowlist so hidden fields can never be probed
+    const picker = ctx.kind === 'staff' && res.key === 'User' && !can(ctx.perms, { mod: res.mod, slug: res.slug }, 'read');
+    if (!picker) authorize(ctx, res, 'read');
+    const q = picker ? Object.fromEntries(Object.entries(req.query as any).filter(([k]) => !k.startsWith('f.') || ['f.kind', 'f.isActive'].includes(k))) as any : req.query as any;
     const limit = Math.min(50, Number(q.limit) || 20);
     const ids = q.ids ? String(q.ids).split(',') : null;
     const sf = res.fields.filter((f) => (f.search || f.name === res.label) && (f.type === 'string' || f.type === 'text'));

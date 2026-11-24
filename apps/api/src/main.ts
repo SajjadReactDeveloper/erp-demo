@@ -5,7 +5,6 @@ import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import { ZodError } from 'zod';
 import { prisma } from '@erp/db';
-import { DEFAULT_ROLES } from '@erp/shared';
 import { HttpError } from './core/base';
 import { registerCrud } from './core/crud';
 import { registerAuth } from './routes/auth';
@@ -92,13 +91,19 @@ registerAuth(app);
 registerCrud(app);
 await registerRoutes(app);
 
-// Additive sync: roles already stored in the database pick up permissions added to the defaults later (never removes any)
+// One-time permission migrations: each id is applied once per company and recorded, so a permission an admin later removes is never re-granted
+const PERM_MIGRATIONS = [{ id: '2026-11-sales-delivery', role: 'sales', add: ['res:delivery-note:assign', 'res:delivery-line:read', 'res:delivery-event:read', 'res:proof-of-delivery:read'] }];
 try {
-  for (const role of await prisma.role.findMany({ where: { name: { in: Object.keys(DEFAULT_ROLES) } } })) {
-    const have = ((role.permissions as any) ?? []) as string[]; const add = DEFAULT_ROLES[role.name].permissions.filter((p) => !have.includes(p));
-    if (add.length && !have.includes('*')) await prisma.role.update({ where: { id: role.id }, data: { permissions: [...have, ...add] } });
+  for (const role of await prisma.role.findMany({ where: { name: { in: PERM_MIGRATIONS.map((m) => m.role) } } })) {
+    const rec = await prisma.setting.findFirst({ where: { companyId: role.companyId, key: 'perm.migrations' } }); const done: string[] = (((rec?.value as any)?.done) ?? []) as string[];
+    let have = ((role.permissions as any) ?? []) as string[]; const fresh = PERM_MIGRATIONS.filter((m) => m.role === role.name && !done.includes(m.id));
+    if (!fresh.length) continue;
+    if (!have.includes('*')) for (const m of fresh) have = [...have, ...m.add.filter((p) => !have.includes(p))];
+    await prisma.role.update({ where: { id: role.id }, data: { permissions: have } });
+    const value = { done: [...done, ...fresh.map((m) => m.id)] };
+    if (rec) await prisma.setting.update({ where: { id: rec.id }, data: { value } }); else await prisma.setting.create({ data: { companyId: role.companyId, key: 'perm.migrations', value, description: 'Applied one-time role permission migrations' } });
   }
-} catch (e) { app.log.warn({ err: String(e) }, 'role permission sync skipped'); }
+} catch (e) { app.log.warn({ err: String(e) }, 'permission migration skipped'); }
 
 await app.listen({ port: PORT, host: '0.0.0.0' });
 if (process.env.DISABLE_WORKER !== '1') startWorker();
