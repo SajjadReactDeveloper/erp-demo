@@ -18,25 +18,57 @@ export function DashHeader({ title, sub, actions }: { title: ReactNode; sub?: Re
   );
 }
 
-const TILE = { primary: 'bg-gold-light text-gold-text', danger: 'bg-danger-bg text-danger', success: 'bg-success-bg text-success', warn: 'bg-warn-bg text-warn', info: 'bg-info-bg text-info' };
-const TOP_BAR = { primary: 'before:bg-gold', danger: 'before:bg-danger/70', success: 'before:bg-success/75', warn: 'before:bg-warn/75', info: 'before:bg-info/75' };
+const TILE = { primary: 'bg-gold-light text-gold-text', danger: 'bg-soft text-navy', success: 'bg-soft text-navy', warn: 'bg-soft text-navy', info: 'bg-soft text-navy' };
 
-export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, spark, href }: { loading?: boolean; icon: string; tone?: keyof typeof TILE; label: string; sub?: ReactNode; value?: ReactNode; chip?: ReactNode; spark?: ReactNode; href?: string }) {
-  if (loading) return <Card className="h-full min-h-[184px] space-y-4 p-5"><div className="flex items-center gap-3"><Skeleton className="h-9 w-9" /><Skeleton className="h-3 w-24" /></div><Skeleton className="h-8 w-28" /><Skeleton className="h-6 w-full" /></Card>;
+export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, spark, href, featured }: { loading?: boolean; icon: string; tone?: keyof typeof TILE; label: string; sub?: ReactNode; value?: ReactNode; chip?: ReactNode; spark?: ReactNode; href?: string; featured?: boolean }) {
+  if (loading) return <Card className="h-full min-h-[192px] space-y-4 p-5"><div className="flex items-center gap-3"><Skeleton className="h-9 w-9" /><Skeleton className="h-3 w-24" /></div><Skeleton className="h-8 w-28" /><Skeleton className="h-7 w-full" /></Card>;
   const inner = (
-    <Card className={cn('group relative flex h-full min-h-[184px] flex-col overflow-hidden p-5 shadow-card transition-all duration-200 before:absolute before:inset-x-0 before:top-0 before:h-[2px] hover:border-gold-border/90 hover:shadow-[0_10px_26px_rgba(11,31,58,0.07)] animate-in', href && 'cursor-pointer', TOP_BAR[tone])}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className={cn('grid h-9 w-9 shrink-0 place-items-center rounded-md', TILE[tone])}><Icon name={icon} size={18} /></span>
-          <div className="min-w-0">
-            <p className="truncate text-small font-semibold text-fg">{label}</p>
-            {sub && <p className="truncate text-[11px] text-muted">{sub}</p>}
+    <Card
+      className={cn(
+        'group relative flex h-full min-h-[192px] flex-col overflow-hidden transition-all duration-200 animate-in',
+        href && 'cursor-pointer',
+        featured
+          ? 'border-navy bg-gradient-to-br from-[#0F2A4F] via-[#0B1F3A] to-[#08162B] text-white shadow-[0_12px_28px_rgba(11,31,58,0.18)] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-gold before:via-[#F3CD77] before:to-gold/20 hover:shadow-[0_16px_34px_rgba(11,31,58,0.24)]'
+          : 'border-line/90 bg-card shadow-[0_1px_2px_rgba(11,31,58,0.03)] hover:border-gold-border hover:shadow-[0_12px_26px_rgba(11,31,58,0.07)]'
+      )}
+    >
+      {featured && <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_92%_10%,rgba(214,161,58,0.2),transparent_55%)]" aria-hidden />}
+      <div className="relative flex flex-1 flex-col p-5 pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              className={cn(
+                'grid h-8 w-8 shrink-0 place-items-center rounded-sm transition-colors',
+                featured ? 'border border-gold/25 bg-gold/15 text-gold' : cn(TILE[tone], 'group-hover:bg-gold-light group-hover:text-gold-text')
+              )}
+            >
+              <Icon name={icon} size={16} />
+            </span>
+            <div className="min-w-0">
+              <p className={cn('truncate text-[13.5px] font-bold leading-tight', featured ? 'text-white' : 'text-fg')}>{label}</p>
+              {sub && <p className={cn('mt-0.5 truncate text-[11px] leading-tight', featured ? 'text-onnavy-muted' : 'text-muted')}>{sub}</p>}
+            </div>
           </div>
+          {href && (
+            <ArrowUpRight
+              size={15}
+              className={cn(
+                'shrink-0 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 rtl:-scale-x-100',
+                featured ? 'text-onnavy-muted group-hover:text-gold' : 'text-muted/45 group-hover:text-navy'
+              )}
+            />
+          )}
         </div>
-        {href && <ArrowUpRight size={15} className="shrink-0 text-muted/40 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-navy rtl:-scale-x-100" />}
+        <div className="mt-4 flex items-baseline justify-between gap-2">
+          <p className={cn('num text-[27px] font-bold leading-none tracking-[-0.025em]', featured ? 'text-white' : 'text-navy')}>{value ?? '—'}</p>
+          {chip}
+        </div>
       </div>
-      <div className="mt-4 flex items-center justify-between gap-2"><p className="num text-kpi">{value ?? '—'}</p>{chip}</div>
-      <div className="mt-auto flex flex-col justify-end pt-3">{spark}</div>
+      {spark && (
+        <div className={cn('relative mt-auto border-t px-5 py-3', featured ? 'border-white/10 bg-white/[0.03]' : 'border-line/70 bg-soft/35')}>
+          {spark}
+        </div>
+      )}
     </Card>
   );
   return href ? <Link href={href} className="block h-full">{inner}</Link> : inner;

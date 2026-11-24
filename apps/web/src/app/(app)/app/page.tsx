@@ -8,7 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useT } from '@/lib/i18n';
 import { fmtCompact, fmtDate, fmtMoney, fmtNum, timeAgo } from '@/lib/format';
-import { BarCard, Gauge, GOLD, NAVY, PALETTE, Sparkline } from '@/components/charts';
+import { Gauge, GOLD, KpiMeter, KpiSplitBar, NAVY, PALETTE, SalesOverviewChart, Sparkline } from '@/components/charts';
 import { Avatar, Badge, Button, Card, CardHeader, EmptyState, Icon, Segmented, Skeleton, SkeletonRows, Star, StatusBadge, cn, toast } from '@/components/ui';
 import { Chip, Kpi, ROW2, th } from '@/components/erp/dash';
 
@@ -88,9 +88,31 @@ export default function Home() {
   const segTotal = series.reduce((a, s) => a + s[seg], 0);
   const bestItem = series.reduce((best, s) => (s[seg] > (best?.[seg] ?? -Infinity) ? s : best), null as any);
   const sparkSales = series.map((s) => Number(s.revenue ?? 0));
-  const sparkMargin = series.map((s) => (s.revenue ? (s.grossProfit / s.revenue) * 100 : 0));
-  const sparkAr: number[] = exec.data?.trends?.receivables ?? [];
-  const sparkRtq: number[] = exec.data?.trends?.requestToQuote ?? [];
+  const sparkMonths = series.map((s) => fmtMonth(s.month));
+  const peakSales = Math.max(...sparkSales, 0);
+  const marginPoints = series.filter((s) => Number(s.revenue ?? 0) > 0).map((s) => (Number(s.grossProfit ?? 0) / Number(s.revenue)) * 100);
+  const avgMargin12m = marginPoints.length ? marginPoints.reduce((a, b) => a + b, 0) / marginPoints.length : Number(k?.grossMarginPct ?? 0);
+  const ageTot = recv.data?.ageing?.totals;
+  const arSegments = ageTot
+    ? [
+        { key: 'cur', label: t('Current'), value: Number(ageTot.current ?? 0), color: NAVY },
+        { key: 'b1', label: '1–30d', value: Number(ageTot.b1 ?? 0), color: GOLD },
+        { key: 'b2', label: '31–60d', value: Number(ageTot.b2 ?? 0), color: '#EA580C' },
+        { key: 'b3', label: '60d+', value: Number(ageTot.b3 ?? 0) + Number(ageTot.b4 ?? 0), color: '#B91C1C' },
+      ]
+    : k
+      ? [
+          { key: 'cur', label: t('Current'), value: Math.max(0, Number(k.receivables ?? 0) - Number(k.overdue ?? 0)), color: NAVY },
+          { key: 'ov', label: t('Overdue'), value: Number(k.overdue ?? 0), color: '#B91C1C' },
+        ]
+      : [];
+  const arTotal = arSegments.reduce((s, x) => s + x.value, 0);
+  const arCurrentPct = arTotal > 0 ? Math.round(((arSegments[0]?.value ?? 0) / arTotal) * 100) : 100;
+  const arSevere = ageTot ? Number(ageTot.b2 ?? 0) + Number(ageTot.b3 ?? 0) + Number(ageTot.b4 ?? 0) : Number(k?.overdue ?? 0);
+  const arSeverePct = arTotal > 0 ? Math.round((arSevere / arTotal) * 100) : 0;
+  const marginDiff = k ? Number(k.grossMarginPct ?? 0) - 18 : 0;
+  const rtqHours = Number(k?.requestToQuoteHours ?? 0);
+  const rtqDiff = rtqHours - 4;
   const orderCount = orders.data?.meta?.total ?? 0;
   const monthLabel = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA' : 'en-GB', { month: 'long', year: 'numeric' }).format(now);
   const openAlerts = ops.data
@@ -174,10 +196,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Row 2: symmetric 4-column executive KPI rail */}
+      {/* Row 2: flagship Midnight Navy Total Sales + 3 architectural executive KPI cards */}
       {hasFinance && (
         <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
           <Kpi
+            featured
             loading={exec.isLoading}
             icon="wallet"
             tone="primary"
@@ -187,15 +210,26 @@ export default function Home() {
             value={k ? <Money v={k.salesMtd} big /> : undefined}
             chip={
               delta != null ? (
-                <Chip tone={delta >= 0 ? 'success' : 'danger'}>
-                  <span className="inline-flex items-center gap-0.5">
-                    {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                    {fmtNum(Math.abs(delta), lang, 1)}%
-                  </span>
-                </Chip>
+                <span
+                  className={cn(
+                    'num inline-flex h-5 items-center gap-0.5 rounded-xs px-1.5 text-[11px] font-semibold leading-none',
+                    delta >= 0 ? 'bg-positive/15 text-positive' : 'bg-[#F87171]/20 text-[#FCA5A5]'
+                  )}
+                >
+                  {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                  {fmtNum(Math.abs(delta), lang, 1)}%
+                </span>
               ) : undefined
             }
-            spark={<Sparkline data={sparkSales} color={GOLD} h={42} />}
+            spark={
+              <div className="space-y-2">
+                <Sparkline data={sparkSales} labels={sparkMonths} color="#F3CD77" h={24} dark format={(v) => fmtMoney(v, lang)} />
+                <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-onnavy-muted">
+                  <span className="num truncate">{t('Prev mo')} {k ? fmtCompact(k.salesPrev) : '—'}</span>
+                  <span className="num shrink-0 font-semibold text-gold">{t('Peak')} {fmtCompact(peakSales)}</span>
+                </div>
+              </div>
+            }
           />
           <Kpi
             loading={exec.isLoading}
@@ -206,7 +240,17 @@ export default function Home() {
             href="/app/dashboards/profitability"
             value={k ? `${fmtNum(k.grossMarginPct, lang, 1)}%` : undefined}
             chip={<Chip tone="gold">{t('Target')} 18%</Chip>}
-            spark={<Sparkline data={sparkMargin} color={GOLD} h={42} />}
+            spark={
+              <KpiMeter
+                value={Number(k?.grossMarginPct ?? 0)}
+                target={18}
+                max={Math.max(35, Math.ceil(Number(k?.grossMarginPct ?? 0) * 1.35))}
+                color={marginDiff >= 0 ? '#15803D' : GOLD}
+                left={`${t('12m avg')} ${fmtNum(avgMargin12m, lang, 1)}%`}
+                right={`${marginDiff >= 0 ? '+' : ''}${fmtNum(marginDiff, lang, 1)} ${t('pp')}`}
+                rightTone={marginDiff >= 0 ? 'success' : 'danger'}
+              />
+            }
           />
           <Kpi
             loading={exec.isLoading}
@@ -217,7 +261,14 @@ export default function Home() {
             href="/app/dashboards/receivables"
             value={k ? <Money v={k.receivables} compact /> : undefined}
             chip={k && k.overdue > 0 ? <Chip tone="danger">{fmtCompact(k.overdue)} {t('overdue')}</Chip> : <Chip tone="success">{t('No overdue')}</Chip>}
-            spark={<Sparkline data={sparkAr} color="#B91C1C" h={42} />}
+            spark={
+              <KpiSplitBar
+                segments={arSegments}
+                left={`${t('Current')} ${arCurrentPct}%`}
+                right={arTotal > 0 ? (arSeverePct > 0 ? `${t('30d+')} ${arSeverePct}%` : t('On track')) : t('No overdue')}
+                rightTone={arSeverePct > 0 ? 'danger' : 'success'}
+              />
+            }
           />
           <Kpi
             loading={exec.isLoading}
@@ -228,15 +279,29 @@ export default function Home() {
             href="/app/request"
             value={k ? `${fmtNum(k.requestToQuoteHours, lang, 1)} ${t('h')}` : undefined}
             chip={<Chip tone={k && k.requestToQuoteHours <= 4 ? 'success' : 'warn'}>{k && k.requestToQuoteHours <= 4 ? t('Within SLA') : t('Above SLA')}</Chip>}
-            spark={<Sparkline data={sparkRtq} color="#1D4ED8" h={42} />}
+            spark={
+              <KpiMeter
+                value={rtqHours}
+                target={4}
+                max={Math.max(10, Math.ceil(rtqHours * 1.35))}
+                color={rtqHours <= 4 ? '#15803D' : '#C2410C'}
+                left={`${t('SLA')} 4 ${t('h')}`}
+                right={
+                  rtqDiff <= 0
+                    ? `-${fmtNum(Math.abs(rtqDiff), lang, 1)} ${t('h')}`
+                    : `+${fmtNum(rtqDiff, lang, 1)} ${t('h')}`
+                }
+                rightTone={rtqDiff <= 0 ? 'success' : 'warn'}
+              />
+            }
           />
         </section>
       )}
 
-      {/* Row 3: Sales overview + Monthly target */}
+      {/* Row 3: Sales overview + Midnight Navy Monthly target */}
       {hasFinance && (
         <section className={ROW2}>
-          <Card className="flex flex-col">
+          <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
             <CardHeader
               title={t('Sales overview')}
               sub={t('Last 12 months')}
@@ -252,93 +317,140 @@ export default function Home() {
                       { key: 'netProfit', label: t('Net profit') },
                     ]}
                   />
-                  <Link href="/app/dashboards/executive" className="hidden items-center gap-1 text-caption font-semibold text-navy hover:underline xl:inline-flex">
+                  <Link href="/app/dashboards/executive" className="hidden items-center gap-1 text-caption font-semibold text-navy hover:text-gold-text xl:inline-flex">
                     {t('Analytics')} <ArrowUpRight size={13} className="rtl:-scale-x-100" />
                   </Link>
                 </div>
               }
             />
-            <div className="mx-6 mt-4 grid divide-y divide-line border border-line bg-soft/35 sm:grid-cols-3 sm:divide-x sm:divide-y-0 rtl:sm:divide-x-reverse">
-              <div className="px-5 py-3.5">
-                <p className="text-caption font-medium text-muted">{t('12-month total')}</p>
-                <div className="num mt-1 text-[22px] font-semibold leading-7 tracking-tight">{exec.isLoading ? <Skeleton className="h-7 w-28" /> : <Money v={segTotal} />}</div>
+            {/* Seamless borderless editorial summary ribbon (no nested box) */}
+            <div className="grid divide-y divide-line/70 border-y border-line/70 bg-soft/35 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x rtl:lg:divide-x-reverse">
+              <div className="px-6 py-3.5">
+                <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted">{t('12-month total')}</p>
+                <div className="num mt-1 text-[20px] font-bold leading-6 tracking-tight text-navy">
+                  {exec.isLoading ? <Skeleton className="h-6 w-24" /> : <Money v={segTotal} />}
+                </div>
               </div>
-              <div className="px-5 py-3.5">
-                <p className="flex items-center gap-1.5 text-caption font-medium text-muted">
-                  <span className="h-2 w-2 rounded-full bg-gold" />
+              <div className="px-6 py-3.5">
+                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold" />
                   <span>{t('This month')}</span>
                 </p>
-                <div className="num mt-1 text-[22px] font-semibold leading-7 tracking-tight">{exec.isLoading ? <Skeleton className="h-7 w-28" /> : <Money v={series[series.length - 1]?.[seg] ?? 0} />}</div>
+                <div className="num mt-1 text-[20px] font-bold leading-6 tracking-tight text-navy">
+                  {exec.isLoading ? <Skeleton className="h-6 w-24" /> : <Money v={series[series.length - 1]?.[seg] ?? 0} />}
+                </div>
               </div>
-              <div className="px-5 py-3.5">
-                <p className="flex items-center justify-between gap-2 text-caption font-medium text-muted">
+              <div className="px-6 py-3.5">
+                <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted">{t('Monthly avg')}</p>
+                <div className="num mt-1 text-[20px] font-bold leading-6 tracking-tight text-navy">
+                  {exec.isLoading ? <Skeleton className="h-6 w-24" /> : <Money v={series.length ? segTotal / series.length : 0} />}
+                </div>
+              </div>
+              <div className="px-6 py-3.5">
+                <p className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-[0.06em] text-muted">
                   <span>{t('Best month')}</span>
-                  {bestItem && <span className="rounded-xs bg-card px-1.5 py-0.5 text-[10.5px] font-semibold text-navy ring-1 ring-inset ring-line">{fmtMonth(bestItem.month)}</span>}
+                  {bestItem && (
+                    <span className="rounded-xs bg-gold-light px-1.5 py-0.5 text-[10px] font-bold normal-case tracking-normal text-gold-text">
+                      {fmtMonth(bestItem.month)}
+                    </span>
+                  )}
                 </p>
-                <div className="num mt-1 text-[22px] font-semibold leading-7 tracking-tight">{exec.isLoading ? <Skeleton className="h-7 w-28" /> : <Money v={bestItem?.[seg] ?? 0} />}</div>
+                <div className="num mt-1 text-[20px] font-bold leading-6 tracking-tight text-navy">
+                  {exec.isLoading ? <Skeleton className="h-6 w-24" /> : <Money v={bestItem?.[seg] ?? 0} />}
+                </div>
               </div>
             </div>
-            <BarCard bare title="" data={segData} h={255} loading={exec.isLoading} />
+            <div className="flex-1 px-2 pt-2">
+              <SalesOverviewChart data={segData} h={272} loading={exec.isLoading} avgLabel={t('Avg')} />
+            </div>
           </Card>
 
-          <Card className="flex flex-col">
-            <CardHeader
-              title={t('Monthly target')}
-              sub={tTotal ? (tRem > 0 ? `${fmtMoney(tRem, lang)} ${t('to go')} · ${daysLeft > 1 ? `${daysLeft} ${t('days left')}` : daysLeft === 1 ? `1 ${t('day left')}` : t('Last day')}` : t('Target met')) : undefined}
-              actions={
-                tTotal ? (
-                  <Badge tone={tPct >= 100 ? 'success' : tPct >= monthPace * 0.85 ? 'gold' : 'warn'} dot>
-                    {tPct >= 100 ? t('Target met') : tPct >= monthPace * 0.85 ? t('On pace') : t('Behind pace')}
-                  </Badge>
-                ) : undefined
-              }
-            />
-            <div className="px-6 pt-3">
-              {sales.isLoading ? (
-                <div className="space-y-4 py-2">
-                  <Skeleton className="mx-auto h-28 w-52" />
-                  <Skeleton className="h-14 w-full" />
+          <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
+            {/* Top Midnight Navy Luminous Target Chamber */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#0F2A4F] via-[#0B1F3A] to-[#08162B] px-6 pb-5 pt-5 text-white">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(214,161,58,0.18),transparent_55%)]" aria-hidden />
+              <Star className="pointer-events-none absolute -end-12 -top-12 text-gold opacity-[0.055]" size={180} />
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-card-title text-white">{t('Monthly target')}</h2>
+                  {tTotal > 0 && (
+                    <p className="mt-0.5 truncate text-caption text-onnavy-muted">
+                      {tRem > 0
+                        ? `${fmtMoney(tRem, lang)} ${t('to go')} · ${daysLeft > 1 ? `${daysLeft} ${t('days left')}` : daysLeft === 1 ? `1 ${t('day left')}` : t('Last day')}`
+                        : t('Target met')}
+                    </p>
+                  )}
                 </div>
-              ) : tTotal ? (
-                <>
-                  <Gauge value={tPct} label={`${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tDone)} / ${fmtCompact(tTotal)}`} size={220} marker={monthPace} showBounds />
-                  <div className="mt-4 grid grid-cols-3 divide-x divide-line border border-line bg-soft/45 rtl:divide-x-reverse">
-                    {[
-                      [t('Achieved'), `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tDone)}`],
-                      [t('Target'), `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tTotal)}`],
-                      [
-                        tRem > 0 && daysLeft > 0 ? t('Daily needed') : t('Remaining'),
-                        tRem > 0 && daysLeft > 0 ? `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(dailyNeed)}` : `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tRem)}`,
-                      ],
-                    ].map(([l, v]) => (
-                      <div key={String(l)} className="px-3 py-2.5 text-center">
-                        <p className="truncate text-[11px] font-medium text-muted">{l}</p>
-                        <p className="num mt-0.5 truncate text-small font-semibold text-fg">{v}</p>
-                      </div>
-                    ))}
+                {tTotal > 0 && (
+                  <span
+                    className={cn(
+                      'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-xs px-2 text-[11px] font-semibold',
+                      tPct >= 100
+                        ? 'bg-positive/20 text-positive'
+                        : tPct >= monthPace * 0.85
+                          ? 'bg-gold/20 text-gold'
+                          : 'bg-[#FB923C]/20 text-[#FDBA74]'
+                    )}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    <span>{tPct >= 100 ? t('Target met') : tPct >= monthPace * 0.85 ? t('On pace') : t('Behind pace')}</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="relative mt-4">
+                {sales.isLoading ? (
+                  <div className="space-y-4 py-2">
+                    <Skeleton className="mx-auto h-28 w-52 !bg-white/10" />
+                    <Skeleton className="h-12 w-full !bg-white/10" />
                   </div>
-                </>
-              ) : (
-                <EmptyState
-                  icon="target"
-                  title={t('No target set')}
-                  desc={t('Set sales targets to track monthly progress.')}
-                  action={
-                    can({ mod: 'sales', slug: 'sales-target' }, 'create') ? (
-                      <Link href="/app/sales-target/new">
-                        <Button size="sm" variant="secondary">
+                ) : tTotal ? (
+                  <>
+                    <Gauge
+                      dark
+                      value={tPct}
+                      label={`${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tDone)} / ${fmtCompact(tTotal)}`}
+                      size={212}
+                      marker={monthPace}
+                      showBounds
+                    />
+                    <div className="mt-4 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-3.5 rtl:divide-x-reverse">
+                      {[
+                        [t('Achieved'), `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tDone)}`],
+                        [t('Target'), `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tTotal)}`],
+                        [
+                          tRem > 0 && daysLeft > 0 ? t('Daily needed') : t('Remaining'),
+                          tRem > 0 && daysLeft > 0 ? `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(dailyNeed)}` : `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tRem)}`,
+                        ],
+                      ].map(([l, v]) => (
+                        <div key={String(l)} className="px-2 text-center first:ps-0 last:pe-0">
+                          <p className="truncate text-[10.5px] font-medium uppercase tracking-[0.06em] text-onnavy-muted">{l}</p>
+                          <p className="num mt-1 truncate text-[13.5px] font-bold text-white">{v}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-4 text-center">
+                    <p className="text-small font-semibold text-white">{t('No target set')}</p>
+                    <p className="mt-1 text-caption text-onnavy-muted">{t('Set sales targets to track monthly progress.')}</p>
+                    {can({ mod: 'sales', slug: 'sales-target' }, 'create') && (
+                      <Link href="/app/sales-target/new" className="mt-3 inline-block">
+                        <Button size="sm" variant="accent">
                           {t('Set a target')}
                         </Button>
                       </Link>
-                    ) : undefined
-                  }
-                />
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="mt-5 flex flex-1 flex-col border-t border-line px-6 py-4">
+
+            {/* Bottom Crisp White Category & Conversion Chamber */}
+            <div className="flex flex-1 flex-col bg-card px-6 py-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="overline text-muted">{t('Sales by category')}</p>
-                <Link href="/app/dashboards/sales" className="inline-flex items-center gap-1 text-caption font-semibold text-navy hover:underline">
+                <Link href="/app/dashboards/sales" className="inline-flex items-center gap-1 text-caption font-semibold text-navy hover:text-gold-text">
                   {t('Details')} <ArrowUpRight size={13} className="rtl:-scale-x-100" />
                 </Link>
               </div>
@@ -355,11 +467,11 @@ export default function Home() {
                         <div className="mb-1.5 flex items-center justify-between gap-2 text-small">
                           <span className="flex min-w-0 items-center gap-2">
                             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PALETTE[i % PALETTE.length] }} />
-                            <span className="truncate font-medium text-fg">{c.name}</span>
+                            <span className="truncate font-semibold text-fg">{c.name}</span>
                           </span>
                           <span className="num flex shrink-0 items-center gap-2 text-caption">
-                            <span className="font-semibold text-fg">{fmtMoney(c.value, lang)}</span>
-                            <span className="w-8 text-end text-muted">{fmtNum(share, lang, 0)}%</span>
+                            <span className="font-semibold text-navy">{fmtMoney(c.value, lang)}</span>
+                            <span className="rounded-xs bg-soft px-1.5 py-0.5 text-[11px] font-semibold text-strong">{fmtNum(share, lang, 0)}%</span>
                           </span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-xs bg-soft">
@@ -371,9 +483,12 @@ export default function Home() {
                 )}
               </div>
               {conv && conv.sent > 0 && (
-                <div className="mt-auto flex items-center justify-between border-t border-line pt-3 text-caption text-muted">
-                  <span>{t('Quote conversion')}</span>
-                  <span className="num font-semibold text-fg">
+                <div className="mt-auto flex items-center justify-between border-t border-line/80 pt-3 text-caption">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-muted">
+                    <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                    <span>{t('Quote conversion')}</span>
+                  </span>
+                  <span className="num font-bold text-navy">
                     {fmtNum(conv.rate, lang, 0)}% <span className="font-normal text-muted">({conv.approved}/{conv.sent})</span>
                   </span>
                 </div>

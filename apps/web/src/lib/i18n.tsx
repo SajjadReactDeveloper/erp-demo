@@ -821,6 +821,14 @@ const AR: Record<string, string> = {
   'Could not deliver': 'تعذر التسليم',
   'Confirm delivery': 'تأكيد التسليم',
   'Proof of delivery': 'إثبات التسليم',
+  'Prev mo': 'الشهر السابق',
+  '12m avg': 'متوسط 12ش',
+  '30d+': '+30ي',
+  'On track': 'ضمن المسار',
+  'SLA': 'الهدف',
+  'pp': 'نقطة',
+  'Monthly avg': 'المتوسط الشهري',
+  'Avg': 'المتوسط',
 };
 
 export const STR_AR = AR;

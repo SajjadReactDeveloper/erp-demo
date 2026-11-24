@@ -1,5 +1,5 @@
 'use client';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useT } from '@/lib/i18n';
 import { fmtCompact, fmtNum } from '@/lib/format';
 import { Card, CardHeader, EmptyState, ErrorState, SkeletonBlock } from '@/components/ui';
@@ -43,13 +43,247 @@ export function PieCard({ data = [], ...p }: P) {
   return <Shell {...p} empty={!data.length || data.every((d) => !d.value)}><ResponsiveContainer><PieChart><Pie data={data} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="84%" paddingAngle={2} stroke="none" label={(e: any) => e.name}>{data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}</Pie><Tooltip content={<Tip lang={lang} />} /></PieChart></ResponsiveContainer></Shell>;
 }
 
-/** Tiny sparkline for KPI cards (system §5.3) */
-export function Sparkline({ data, color = NAVY, h = 38 }: { data: number[]; color?: string; h?: number }) {
-  const rows = data.map((v, i) => ({ i, v })); const lo = Math.min(...data, 0), hi = Math.max(...data, 1), pad = (hi - lo) * 0.1; // pad the domain so a flat run at the minimum isn't clipped by the chart edge
-  return <div style={{ height: h }} dir="ltr" aria-hidden><ResponsiveContainer><AreaChart data={rows} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}><defs><linearGradient id={`sp-${color.slice(1)}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.25} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><YAxis hide domain={[lo - pad, hi + pad]} /><Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#sp-${color.slice(1)})`} dot={false} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>;
+/** Executive 12-month composed chart: slender Navy/Gold columns + smooth brushed-gold trend + dashed average line. */
+export function SalesOverviewChart({
+  data = [],
+  loading,
+  h = 265,
+  avgLabel,
+}: {
+  data?: { name: string; value: number }[];
+  loading?: boolean;
+  h?: number;
+  avgLabel?: string;
+}) {
+  const { lang, t } = useT();
+  const avg = data.length ? data.reduce((s, d) => s + Number(d.value ?? 0), 0) / data.length : 0;
+  return (
+    <Shell bare title="" loading={loading} empty={!data.length} h={h}>
+      <ResponsiveContainer>
+        <ComposedChart data={data} margin={{ top: 14, left: 0, right: 10, bottom: 2 }}>
+          <defs>
+            <linearGradient id="so-navy" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#1D4170" />
+              <stop offset="100%" stopColor={NAVY} />
+            </linearGradient>
+            <linearGradient id="so-gold" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#F3CD77" />
+              <stop offset="100%" stopColor="#C48F29" />
+            </linearGradient>
+            <linearGradient id="so-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={GOLD} stopOpacity={0.14} />
+              <stop offset="100%" stopColor={GOLD} stopOpacity={0.0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="name" {...axis} interval={0} height={26} axisLine={false} />
+          <YAxis {...axis} axisLine={false} width={44} tickFormatter={fmtCompact} />
+          <Tooltip
+            content={<Tip lang={lang} />}
+            cursor={{ fill: '#0B1F3A', opacity: 0.045 }}
+          />
+          {avg > 0 && (
+            <ReferenceLine
+              y={avg}
+              stroke="#94A3B8"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+              label={{
+                value: `${avgLabel ?? t('Avg')} ${fmtCompact(avg)}`,
+                position: 'insideTopRight',
+                fill: AXIS,
+                fontSize: 10.5,
+                fontWeight: 600,
+              }}
+            />
+          )}
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke={GOLD}
+            strokeWidth={1.75}
+            strokeOpacity={0.7}
+            fill="url(#so-area)"
+            dot={false}
+            activeDot={{ r: 4, fill: GOLD, stroke: '#FFFFFF', strokeWidth: 2 }}
+            tooltipType="none"
+          />
+          <Bar dataKey="value" name={t('Value')} radius={[3, 3, 0, 0]} maxBarSize={22}>
+            {data.map((_, j) => (
+              <Cell
+                key={j}
+                fill={j === data.length - 1 && data.length > 3 ? 'url(#so-gold)' : 'url(#so-navy)'}
+              />
+            ))}
+          </Bar>
+        </ComposedChart>
+      </ResponsiveContainer>
+    </Shell>
+  );
 }
-/** Half-ring gauge (system §5.8) */
-export function Gauge({ value, label, size = 200, marker, showBounds }: { value: number; label?: string; size?: number; marker?: number; showBounds?: boolean }) {
+
+/** Crisp architectural micro-bar sparkline for KPI cards (replaces wavy monotone area blobs). */
+export function Sparkline({
+  data,
+  color = NAVY,
+  h = 34,
+  labels,
+  target,
+  format,
+  dark,
+}: {
+  data: number[];
+  color?: string;
+  h?: number;
+  labels?: string[];
+  target?: number;
+  format?: (v: number) => string;
+  dark?: boolean;
+}) {
+  const vals = data.length ? data : [0];
+  const hi = Math.max(...vals, target ?? 0, 1);
+  const peakIdx = vals.reduce((bi, v, i) => (v > vals[bi] ? i : bi), 0);
+  const lastIdx = vals.length - 1;
+  const targetPct = target != null && hi > 0 ? Math.max(4, Math.min(96, (target / hi) * 100)) : null;
+
+  return (
+    <div
+      className={`relative flex w-full items-end gap-[4px] border-b pb-[2px] ${dark ? 'border-white/15' : 'border-line/70'}`}
+      style={{ height: h }}
+      dir="ltr"
+    >
+      {targetPct != null && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 border-t border-dashed ${dark ? 'border-white/25' : 'border-navy/25'}`}
+          style={{ bottom: `calc(${targetPct}% + 2px)` }}
+          aria-hidden
+        />
+      )}
+      {vals.map((v, i) => {
+        const pct = v > 0 ? Math.max(16, Math.round((v / hi) * 100)) : 0;
+        const isLast = i === lastIdx;
+        const isPeak = i === peakIdx && v > 0;
+        const tip = `${labels?.[i] ? `${labels[i]}: ` : ''}${format ? format(v) : fmtCompact(v)}`;
+        return (
+          <div key={i} title={tip} className="group/bar relative flex h-full flex-1 items-end">
+            <span
+              className="block w-full rounded-t-[1.5px] transition-opacity duration-150 group-hover/bar:opacity-100"
+              style={{
+                height: v > 0 ? `${pct}%` : '2px',
+                backgroundColor: color,
+                opacity: v <= 0 ? (dark ? 0.18 : 0.14) : isLast ? 1 : isPeak ? (dark ? 0.72 : 0.55) : dark ? 0.36 : 0.24,
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Precision horizontal benchmark bar with subtle target notch and two-sided caption. */
+export function KpiMeter({
+  value,
+  target,
+  max,
+  color,
+  left,
+  right,
+  rightTone = 'muted',
+}: {
+  value: number;
+  target: number;
+  max: number;
+  color: string;
+  left: React.ReactNode;
+  right: React.ReactNode;
+  rightTone?: 'success' | 'danger' | 'warn' | 'muted';
+}) {
+  const safeMax = Math.max(max, target, value, 1);
+  const valPct = Math.max(2, Math.min(100, (value / safeMax) * 100));
+  const targetPct = Math.max(4, Math.min(96, (target / safeMax) * 100));
+  const toneCls =
+    rightTone === 'success'
+      ? 'text-success font-semibold'
+      : rightTone === 'danger'
+        ? 'text-danger font-semibold'
+        : rightTone === 'warn'
+          ? 'text-warn font-semibold'
+          : 'text-strong font-medium';
+
+  return (
+    <div className="space-y-2">
+      <div className="relative flex h-3.5 items-center" dir="ltr">
+        <div className="relative h-1.5 w-full overflow-hidden rounded-xs bg-soft">
+          <div
+            className="relative h-full rounded-xs transition-all duration-300"
+            style={{ width: `${valPct}%`, backgroundColor: color }}
+          />
+        </div>
+        <span
+          className="pointer-events-none absolute top-0.5 h-2.5 w-[1.5px] -translate-x-1/2 rounded-xs bg-navy/75 ring-1 ring-white"
+          style={{ left: `${targetPct}%` }}
+          aria-hidden
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2 text-[11px] leading-none">
+        <span className="num truncate text-muted">{left}</span>
+        <span className={`num shrink-0 ${toneCls}`}>{right}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Clean segmented breakdown bar with calm two-sided footer caption. */
+export function KpiSplitBar({
+  segments,
+  left,
+  right,
+  rightTone = 'muted',
+}: {
+  segments: { key: string; label: string; value: number; color: string }[];
+  left: React.ReactNode;
+  right: React.ReactNode;
+  rightTone?: 'success' | 'danger' | 'warn' | 'muted';
+}) {
+  const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
+  const active = segments.filter((x) => x.value > 0);
+  const toneCls =
+    rightTone === 'success'
+      ? 'text-success font-semibold'
+      : rightTone === 'danger'
+        ? 'text-danger font-semibold'
+        : rightTone === 'warn'
+          ? 'text-warn font-semibold'
+          : 'text-strong font-medium';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex h-3.5 items-center">
+        <div className="flex h-1.5 w-full gap-[2px] overflow-hidden rounded-xs bg-soft" dir="ltr" role="img" aria-label="Distribution">
+          {total > 0 ? (
+            active.map((x) => (
+              <div
+                key={x.key}
+                title={`${x.label}: ${Math.round((x.value / total) * 100)}%`}
+                style={{ width: `${(x.value / total) * 100}%`, backgroundColor: x.color }}
+                className="h-full min-w-[3px] first:rounded-s-xs last:rounded-e-xs"
+              />
+            ))
+          ) : (
+            <div className="h-full w-full bg-success/30" />
+          )}
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 text-[11px] leading-none">
+        <span className="num truncate text-muted">{left}</span>
+        <span className={`num shrink-0 ${toneCls}`}>{right}</span>
+      </div>
+    </div>
+  );
+}
+/** Half-ring gauge (system §5.8), with luminous dark Midnight Navy variant. */
+export function Gauge({ value, label, size = 200, marker, showBounds, dark }: { value: number; label?: string; size?: number; marker?: number; showBounds?: boolean; dark?: boolean }) {
   const v = Math.max(0, Math.min(100, value));
   const r = 82, cx = 110, cy = 102, c = Math.PI * r;
   const pctText = v > 0 && v < 10 ? v.toFixed(1) : String(Math.round(v));
@@ -60,29 +294,58 @@ export function Gauge({ value, label, size = 200, marker, showBounds }: { value:
     <div className="relative mx-auto" style={{ width: size, height: h }} dir="ltr" role="img" aria-label={`${pctText}%`}>
       <svg viewBox={showBounds ? '0 0 220 128' : '0 0 220 116'} width={size} height={h} className="overflow-visible">
         <defs>
-          <linearGradient id="gauge-gold" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#E4B85B" />
+          <linearGradient id={dark ? 'gauge-gold-dark' : 'gauge-gold'} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#F6D88C" />
             <stop offset="100%" stopColor={GOLD} />
           </linearGradient>
         </defs>
-        <path d="M 42 102 A 68 68 0 0 1 178 102" fill="none" stroke="#E2E8F0" strokeWidth="1.25" strokeDasharray="2 5" />
-        <path d="M 28 102 A 82 82 0 0 1 192 102" fill="none" stroke={GRID} strokeWidth="14" strokeLinecap="round" />
+        <path
+          d="M 42 102 A 68 68 0 0 1 178 102"
+          fill="none"
+          stroke={dark ? 'rgba(255,255,255,0.14)' : '#E2E8F0'}
+          strokeWidth="1.25"
+          strokeDasharray="2 5"
+        />
+        <path
+          d="M 28 102 A 82 82 0 0 1 192 102"
+          fill="none"
+          stroke={dark ? 'rgba(255,255,255,0.11)' : GRID}
+          strokeWidth="14"
+          strokeLinecap="round"
+        />
         {v > 0 && (
-          <path d="M 28 102 A 82 82 0 0 1 192 102" fill="none" stroke="url(#gauge-gold)" strokeWidth="14" strokeLinecap="round" strokeDasharray={`${Math.max(0.01, v / 100) * c} ${c}`} />
+          <path
+            d="M 28 102 A 82 82 0 0 1 192 102"
+            fill="none"
+            stroke={dark ? 'url(#gauge-gold-dark)' : 'url(#gauge-gold)'}
+            strokeWidth="14"
+            strokeLinecap="round"
+            strokeDasharray={`${Math.max(0.015, v / 100) * c} ${c}`}
+            style={dark ? { filter: 'drop-shadow(0 0 8px rgba(214,161,58,0.45))' } : undefined}
+          />
         )}
         {m != null && (
-          <line x1={cx + 71 * Math.cos(rad)} y1={cy - 71 * Math.sin(rad)} x2={cx + 93 * Math.cos(rad)} y2={cy - 93 * Math.sin(rad)} stroke={NAVY} strokeWidth="2" strokeLinecap="round" opacity="0.45" />
+          <line
+            x1={cx + 71 * Math.cos(rad)}
+            y1={cy - 71 * Math.sin(rad)}
+            x2={cx + 93 * Math.cos(rad)}
+            y2={cy - 93 * Math.sin(rad)}
+            stroke={dark ? '#FFFFFF' : NAVY}
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity={dark ? '0.65' : '0.45'}
+          />
         )}
         {showBounds && (
           <>
-            <text x="28" y="122" textAnchor="middle" fill={SLATE} fontSize="10" fontWeight="500">0%</text>
-            <text x="192" y="122" textAnchor="middle" fill={SLATE} fontSize="10" fontWeight="500">100%</text>
+            <text x="28" y="122" textAnchor="middle" fill={dark ? '#9FB0C8' : SLATE} fontSize="10" fontWeight="500">0%</text>
+            <text x="192" y="122" textAnchor="middle" fill={dark ? '#9FB0C8' : SLATE} fontSize="10" fontWeight="500">100%</text>
           </>
         )}
       </svg>
       <div className={showBounds ? 'absolute inset-x-0 bottom-4 text-center' : 'absolute inset-x-0 bottom-0.5 text-center'}>
-        <p className="num text-[30px] font-bold leading-none tracking-tight text-fg">{pctText}%</p>
-        {label && <p className="num mt-1.5 text-caption font-medium text-muted">{label}</p>}
+        <p className={`num text-[32px] font-bold leading-none tracking-tight ${dark ? 'text-white' : 'text-fg'}`}>{pctText}%</p>
+        {label && <p className={`num mt-1.5 text-caption font-medium ${dark ? 'text-onnavy-muted' : 'text-muted'}`}>{label}</p>}
       </div>
     </div>
   );
