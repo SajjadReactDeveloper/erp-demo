@@ -63,12 +63,12 @@ export function SalesOverviewChart({
         <ComposedChart data={data} margin={{ top: 14, left: 0, right: 10, bottom: 2 }}>
           <defs>
             <linearGradient id="so-navy" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1D4170" />
-              <stop offset="100%" stopColor={NAVY} />
+              <stop offset="0%" stopColor="#4A74A8" />
+              <stop offset="100%" stopColor="#264C7D" />
             </linearGradient>
             <linearGradient id="so-gold" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#F3CD77" />
-              <stop offset="100%" stopColor="#C48F29" />
+              <stop offset="100%" stopColor="#D6A13A" />
             </linearGradient>
             <linearGradient id="so-area" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={GOLD} stopOpacity={0.14} />

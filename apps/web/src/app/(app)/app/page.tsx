@@ -196,7 +196,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Row 2: flagship Midnight Navy Total Sales + 3 architectural executive KPI cards */}
+      {/* Row 2: warm champagne-gold flagship Total Sales + 3 crisp architectural KPI cards */}
       {hasFinance && (
         <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
           <Kpi
@@ -210,23 +210,20 @@ export default function Home() {
             value={k ? <Money v={k.salesMtd} big /> : undefined}
             chip={
               delta != null ? (
-                <span
-                  className={cn(
-                    'num inline-flex h-5 items-center gap-0.5 rounded-xs px-1.5 text-[11px] font-semibold leading-none',
-                    delta >= 0 ? 'bg-positive/15 text-positive' : 'bg-[#F87171]/20 text-[#FCA5A5]'
-                  )}
-                >
-                  {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                  {fmtNum(Math.abs(delta), lang, 1)}%
-                </span>
+                <Chip tone={delta >= 0 ? 'success' : 'danger'}>
+                  <span className="inline-flex items-center gap-0.5">
+                    {delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                    {fmtNum(Math.abs(delta), lang, 1)}%
+                  </span>
+                </Chip>
               ) : undefined
             }
             spark={
               <div className="space-y-2">
-                <Sparkline data={sparkSales} labels={sparkMonths} color="#F3CD77" h={24} dark format={(v) => fmtMoney(v, lang)} />
-                <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-onnavy-muted">
+                <Sparkline data={sparkSales} labels={sparkMonths} color="#C89128" h={24} format={(v) => fmtMoney(v, lang)} />
+                <div className="flex items-center justify-between gap-2 text-[11px] leading-none text-muted">
                   <span className="num truncate">{t('Prev mo')} {k ? fmtCompact(k.salesPrev) : '—'}</span>
-                  <span className="num shrink-0 font-semibold text-gold">{t('Peak')} {fmtCompact(peakSales)}</span>
+                  <span className="num shrink-0 font-semibold text-gold-text">{t('Peak')} {fmtCompact(peakSales)}</span>
                 </div>
               </div>
             }
@@ -366,15 +363,14 @@ export default function Home() {
           </Card>
 
           <Card className="flex flex-col overflow-hidden shadow-[0_1px_2px_rgba(11,31,58,0.03)]">
-            {/* Top Midnight Navy Luminous Target Chamber */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#0F2A4F] via-[#0B1F3A] to-[#08162B] px-6 pb-5 pt-5 text-white">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(214,161,58,0.18),transparent_55%)]" aria-hidden />
-              <Star className="pointer-events-none absolute -end-12 -top-12 text-gold opacity-[0.055]" size={180} />
+            {/* Airy Pearl-to-White Target Chamber (no heavy dark block) */}
+            <div className="relative overflow-hidden bg-gradient-to-b from-[#F4F7FC] via-[#FAFBFD] to-white px-6 pb-5 pt-5">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[#3B669C] via-gold to-gold/30" aria-hidden />
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="text-card-title text-white">{t('Monthly target')}</h2>
+                  <h2 className="text-card-title text-navy">{t('Monthly target')}</h2>
                   {tTotal > 0 && (
-                    <p className="mt-0.5 truncate text-caption text-onnavy-muted">
+                    <p className="mt-0.5 truncate text-caption text-muted">
                       {tRem > 0
                         ? `${fmtMoney(tRem, lang)} ${t('to go')} · ${daysLeft > 1 ? `${daysLeft} ${t('days left')}` : daysLeft === 1 ? `1 ${t('day left')}` : t('Last day')}`
                         : t('Target met')}
@@ -382,39 +378,28 @@ export default function Home() {
                   )}
                 </div>
                 {tTotal > 0 && (
-                  <span
-                    className={cn(
-                      'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-xs px-2 text-[11px] font-semibold',
-                      tPct >= 100
-                        ? 'bg-positive/20 text-positive'
-                        : tPct >= monthPace * 0.85
-                          ? 'bg-gold/20 text-gold'
-                          : 'bg-[#FB923C]/20 text-[#FDBA74]'
-                    )}
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                    <span>{tPct >= 100 ? t('Target met') : tPct >= monthPace * 0.85 ? t('On pace') : t('Behind pace')}</span>
-                  </span>
+                  <Badge tone={tPct >= 100 ? 'success' : tPct >= monthPace * 0.85 ? 'gold' : 'warn'} dot>
+                    {tPct >= 100 ? t('Target met') : tPct >= monthPace * 0.85 ? t('On pace') : t('Behind pace')}
+                  </Badge>
                 )}
               </div>
 
               <div className="relative mt-4">
                 {sales.isLoading ? (
                   <div className="space-y-4 py-2">
-                    <Skeleton className="mx-auto h-28 w-52 !bg-white/10" />
-                    <Skeleton className="h-12 w-full !bg-white/10" />
+                    <Skeleton className="mx-auto h-28 w-52" />
+                    <Skeleton className="h-12 w-full" />
                   </div>
                 ) : tTotal ? (
                   <>
                     <Gauge
-                      dark
                       value={tPct}
                       label={`${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tDone)} / ${fmtCompact(tTotal)}`}
                       size={212}
                       marker={monthPace}
                       showBounds
                     />
-                    <div className="mt-4 grid grid-cols-3 divide-x divide-white/10 border-t border-white/10 pt-3.5 rtl:divide-x-reverse">
+                    <div className="mt-4 grid grid-cols-3 divide-x divide-line/80 border-t border-line/80 pt-3.5 rtl:divide-x-reverse">
                       {[
                         [t('Achieved'), `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tDone)}`],
                         [t('Target'), `${lang === 'ar' ? 'ر.س' : 'SAR'} ${fmtCompact(tTotal)}`],
@@ -424,30 +409,33 @@ export default function Home() {
                         ],
                       ].map(([l, v]) => (
                         <div key={String(l)} className="px-2 text-center first:ps-0 last:pe-0">
-                          <p className="truncate text-[10.5px] font-medium uppercase tracking-[0.06em] text-onnavy-muted">{l}</p>
-                          <p className="num mt-1 truncate text-[13.5px] font-bold text-white">{v}</p>
+                          <p className="truncate text-[10.5px] font-medium uppercase tracking-[0.06em] text-muted">{l}</p>
+                          <p className="num mt-1 truncate text-[13.5px] font-bold text-navy">{v}</p>
                         </div>
                       ))}
                     </div>
                   </>
                 ) : (
-                  <div className="py-4 text-center">
-                    <p className="text-small font-semibold text-white">{t('No target set')}</p>
-                    <p className="mt-1 text-caption text-onnavy-muted">{t('Set sales targets to track monthly progress.')}</p>
-                    {can({ mod: 'sales', slug: 'sales-target' }, 'create') && (
-                      <Link href="/app/sales-target/new" className="mt-3 inline-block">
-                        <Button size="sm" variant="accent">
-                          {t('Set a target')}
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
+                  <EmptyState
+                    icon="target"
+                    title={t('No target set')}
+                    desc={t('Set sales targets to track monthly progress.')}
+                    action={
+                      can({ mod: 'sales', slug: 'sales-target' }, 'create') ? (
+                        <Link href="/app/sales-target/new">
+                          <Button size="sm" variant="secondary">
+                            {t('Set a target')}
+                          </Button>
+                        </Link>
+                      ) : undefined
+                    }
+                  />
                 )}
               </div>
             </div>
 
             {/* Bottom Crisp White Category & Conversion Chamber */}
-            <div className="flex flex-1 flex-col bg-card px-6 py-4">
+            <div className="flex flex-1 flex-col border-t border-line/80 bg-card px-6 py-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="overline text-muted">{t('Sales by category')}</p>
                 <Link href="/app/dashboards/sales" className="inline-flex items-center gap-1 text-caption font-semibold text-navy hover:text-gold-text">
@@ -462,11 +450,12 @@ export default function Home() {
                 ) : (
                   cats.map((c, i) => {
                     const share = (c.value / catTotal) * 100;
+                    const barColor = i === 0 ? '#3B669C' : i === 1 ? GOLD : PALETTE[i % PALETTE.length];
                     return (
                       <div key={c.name}>
                         <div className="mb-1.5 flex items-center justify-between gap-2 text-small">
                           <span className="flex min-w-0 items-center gap-2">
-                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: PALETTE[i % PALETTE.length] }} />
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: barColor }} />
                             <span className="truncate font-semibold text-fg">{c.name}</span>
                           </span>
                           <span className="num flex shrink-0 items-center gap-2 text-caption">
@@ -475,7 +464,7 @@ export default function Home() {
                           </span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-xs bg-soft">
-                          <div className="h-full rounded-xs" style={{ width: `${Math.max(2, share)}%`, background: PALETTE[i % PALETTE.length] }} />
+                          <div className="h-full rounded-xs" style={{ width: `${Math.max(2, share)}%`, background: barColor }} />
                         </div>
                       </div>
                     );

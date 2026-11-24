@@ -28,25 +28,24 @@ export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, 
         'group relative flex h-full min-h-[192px] flex-col overflow-hidden transition-all duration-200 animate-in',
         href && 'cursor-pointer',
         featured
-          ? 'border-navy bg-gradient-to-br from-[#0F2A4F] via-[#0B1F3A] to-[#08162B] text-white shadow-[0_12px_28px_rgba(11,31,58,0.18)] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-gold before:via-[#F3CD77] before:to-gold/20 hover:shadow-[0_16px_34px_rgba(11,31,58,0.24)]'
+          ? 'border-gold-border/90 bg-gradient-to-br from-[#FFFDF7] via-white to-[#FBF4E4] shadow-[0_2px_10px_rgba(214,161,58,0.08)] before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-gradient-to-r before:from-gold before:via-[#F3CD77] before:to-gold/30 hover:border-gold hover:shadow-[0_12px_28px_rgba(214,161,58,0.14)]'
           : 'border-line/90 bg-card shadow-[0_1px_2px_rgba(11,31,58,0.03)] hover:border-gold-border hover:shadow-[0_12px_26px_rgba(11,31,58,0.07)]'
       )}
     >
-      {featured && <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_92%_10%,rgba(214,161,58,0.2),transparent_55%)]" aria-hidden />}
       <div className="relative flex flex-1 flex-col p-5 pb-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
             <span
               className={cn(
                 'grid h-8 w-8 shrink-0 place-items-center rounded-sm transition-colors',
-                featured ? 'border border-gold/25 bg-gold/15 text-gold' : cn(TILE[tone], 'group-hover:bg-gold-light group-hover:text-gold-text')
+                featured ? 'bg-gold-light text-gold-text' : cn(TILE[tone], 'group-hover:bg-gold-light group-hover:text-gold-text')
               )}
             >
               <Icon name={icon} size={16} />
             </span>
             <div className="min-w-0">
-              <p className={cn('truncate text-[13.5px] font-bold leading-tight', featured ? 'text-white' : 'text-fg')}>{label}</p>
-              {sub && <p className={cn('mt-0.5 truncate text-[11px] leading-tight', featured ? 'text-onnavy-muted' : 'text-muted')}>{sub}</p>}
+              <p className="truncate text-[13.5px] font-bold leading-tight text-fg">{label}</p>
+              {sub && <p className="mt-0.5 truncate text-[11px] leading-tight text-muted">{sub}</p>}
             </div>
           </div>
           {href && (
@@ -54,18 +53,18 @@ export function Kpi({ loading, icon, tone = 'primary', label, sub, value, chip, 
               size={15}
               className={cn(
                 'shrink-0 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 rtl:-scale-x-100',
-                featured ? 'text-onnavy-muted group-hover:text-gold' : 'text-muted/45 group-hover:text-navy'
+                featured ? 'text-gold-text/55 group-hover:text-gold-text' : 'text-muted/45 group-hover:text-navy'
               )}
             />
           )}
         </div>
         <div className="mt-4 flex items-baseline justify-between gap-2">
-          <p className={cn('num text-[27px] font-bold leading-none tracking-[-0.025em]', featured ? 'text-white' : 'text-navy')}>{value ?? '—'}</p>
+          <p className="num text-[27px] font-bold leading-none tracking-[-0.025em] text-navy">{value ?? '—'}</p>
           {chip}
         </div>
       </div>
       {spark && (
-        <div className={cn('relative mt-auto border-t px-5 py-3', featured ? 'border-white/10 bg-white/[0.03]' : 'border-line/70 bg-soft/35')}>
+        <div className={cn('relative mt-auto border-t px-5 py-3', featured ? 'border-gold-border/55 bg-[#FAF3E1]/45' : 'border-line/70 bg-soft/35')}>
           {spark}
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client';
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, MapPin, Phone } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, MapPin, Navigation, Phone, Truck } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { enqueue, getDeviceId, useWorkset } from '@/lib/offline';
 import { norm, ScanInput } from '@/components/erp/scan-input';
@@ -40,12 +40,18 @@ export default function DeliveryStop({ params }: { params: Promise<{ id: string 
   const done = status === 'delivered' || status === 'failed';
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between"><h1 className="text-xl font-extrabold">{d.number}</h1><StatusBadge value={status} /></div>
-      <Card className="space-y-3 p-4"><div><b className="text-lg">{d.customer?.name}</b><p className="text-sm text-muted">{d.address?.line1} {d.address?.city}</p></div><div className="flex gap-2">{d.customer?.phone && <a href={`tel:${d.customer.phone}`} className="flex-1"><Button variant="secondary" className="w-full"><Phone size={16} />{t('Call')}</Button></a>}<a href={maps} target="_blank" rel="noreferrer" className="flex-1"><Button variant="secondary" className="w-full"><MapPin size={16} />{t('Navigate')}</Button></a></div></Card>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-navy to-navy-light p-5 text-white shadow-md">
+        <Truck size={110} strokeWidth={1.2} className="pointer-events-none absolute -bottom-3 -end-3 opacity-10" />
+        <div className="flex items-center justify-between gap-2"><b className="num text-sm tracking-wide text-gold">{d.number}</b><StatusBadge value={status} /></div>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight">{d.customer?.name}</h1>
+        <p className="mt-1 flex items-start gap-1.5 text-sm text-onnavy-secondary"><MapPin size={15} className="mt-0.5 shrink-0 text-gold" />{d.address?.line1} {d.address?.city}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">{d.customer?.phone ? <a href={`tel:${d.customer.phone}`} className="flex items-center justify-center gap-2 rounded-xl bg-white/10 py-3 text-sm font-bold transition active:scale-95"><Phone size={16} />{t('Call')}</a> : <span />}<a href={maps} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-gold py-3 text-sm font-bold text-navy transition active:scale-95"><Navigation size={16} />{t('Navigate')}</a></div>
+      </div>
       {!done && <ScanInput onScan={scan} autoFocus={false} />}
       {alert && <div role="alert" className="flex items-center gap-3 rounded-2xl bg-danger p-4 font-bold text-white animate-in"><AlertTriangle size={28} />{alert}</div>}
-      <div className="space-y-2">{d.lines.map((l: any) => { const s = scanned[l.id] ?? 0; return <Card key={l.id} className={cn('flex items-center justify-between gap-3 p-3', s >= l.qty && 'border-success/50 bg-success/5')}><span className="min-w-0"><b className="num block text-sm" dir="ltr">{l.partNumber}</b><span className="text-xs text-muted">{l.name}</span></span>{s >= l.qty ? <CheckCircle2 className="text-success" /> : <Badge tone={s ? 'warn' : 'muted'}>{s}/{l.qty}</Badge>}</Card>; })}</div>
-      {!done && <div className="sticky bottom-3 grid gap-2 sm:grid-cols-2">{status !== 'out_for_delivery' ? <Button size="lg" className="sm:col-span-2" onClick={start}>{t('Start delivery')}</Button> : <><Button size="lg" onClick={startPod}>{t('Deliver & sign')}</Button><Button size="lg" variant="secondary" className="text-danger" onClick={() => setFail(true)}>{t('Could not deliver')}</Button></>}</div>}
+      <div><h2 className="mb-2 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-muted"><span>{t('Items on this stop')}</span><span className="num">{d.lines.reduce((n: number, l: any) => n + Math.min(scanned[l.id] ?? 0, l.qty), 0)}/{d.lines.reduce((n: number, l: any) => n + l.qty, 0)}</span></h2>
+      <div className="space-y-2">{d.lines.map((l: any) => { const s = scanned[l.id] ?? 0; const ok = s >= l.qty; return <Card key={l.id} className={cn('p-3.5 shadow-sm', ok && 'border-success/50 bg-success/5')}><div className="flex items-center justify-between gap-3"><span className="min-w-0"><b className="num block text-sm" dir="ltr">{l.partNumber}</b><span className="text-xs text-muted">{l.name}</span></span>{ok ? <CheckCircle2 className="shrink-0 text-success" /> : <Badge tone={s ? 'warn' : 'muted'}>{s}/{l.qty}</Badge>}</div><div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-line"><div className={cn('h-full rounded-full transition-all', ok ? 'bg-success' : 'bg-gold')} style={{ width: `${Math.min(100, (s / l.qty) * 100)}%` }} /></div></Card>; })}</div></div>
+      {!done && <div className="sticky bottom-3 grid gap-2 rounded-2xl bg-bg/90 p-1 shadow-lg backdrop-blur sm:grid-cols-2">{status !== 'out_for_delivery' ? <Button size="lg" className="sm:col-span-2" onClick={start}>{t('Start delivery')}</Button> : <><Button size="lg" onClick={startPod}>{t('Deliver & sign')}</Button><Button size="lg" variant="secondary" className="text-danger" onClick={() => setFail(true)}>{t('Could not deliver')}</Button></>}</div>}
       <Button variant="ghost" className="w-full" onClick={() => openDoc(`/api/v1/docs/label/${id}`, { kind: 'delivery_note' })}>{t('Print label')}</Button>
 
       <Modal open={pod} onClose={() => setPod(false)} title={t('Proof of delivery')} wide footer={<><Button variant="secondary" onClick={() => setPod(false)}>{t('Cancel')}</Button><Button disabled={!ink || !name.trim()} onClick={submitPod}>{t('Confirm delivery')}</Button></>}>
